@@ -1,0 +1,287 @@
+﻿@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --background: #000000;
+  --foreground: #e7f1ff;
+
+  --card: #0d1b35;
+  --card-foreground: #e7f1ff;
+
+  --popover: #112441;
+  --popover-foreground: #e7f1ff;
+
+  --primary: #1f8fff;
+  --primary-foreground: #f2f8ff;
+
+  --secondary: #173053;
+  --secondary-foreground: #e7f1ff;
+
+  --muted: #9cb4d4;
+  --muted-foreground: #b7c9e3;
+
+  --accent: #2f76c0;
+  --accent-foreground: #f2f8ff;
+
+  --destructive: #ef4444;
+
+  --border: #2a4061;
+  --border-strong: #4f78a5;
+  --input: #2a4061;
+  --ring: rgba(76, 162, 255, 0.36);
+
+  --radius: 0.625rem;
+
+  
+  --chart-1: #6366f1;
+  --chart-2: #22c55e;
+  --chart-3: #f59e0b;
+  --chart-4: #06b6d4;
+  --chart-5: #ef4444;
+
+  
+  --sidebar: #091a34;
+  --sidebar-foreground: #e7f1ff;
+  --sidebar-primary: #1f8fff;
+  --sidebar-primary-foreground: #f2f8ff;
+  --sidebar-accent: #163154;
+  --sidebar-accent-foreground: #e7f1ff;
+  --sidebar-border: #2a4061;
+  --sidebar-ring: rgba(76, 162, 255, 0.36);
+
+  
+  --surface: #0b0b0b;
+  --surface-elevated: #111111;
+  --surface-soft: #161616;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --animate-marquee: marquee var(--duration) infinite linear;
+  --animate-marquee-vertical: marquee-vertical var(--duration) linear infinite;
+  @keyframes marquee {
+  from {
+    transform: translateX(0);
+    }
+  to {
+    transform: translateX(calc(-100% - var(--gap)));
+    }
+  }
+  @keyframes marquee-vertical {
+  from {
+    transform: translateY(0);
+    }
+  to {
+    transform: translateY(calc(-100% - var(--gap)));
+    }
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-geist-sans), "Segoe UI", sans-serif;
+    background-image: none;
+  }
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.surface {
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.surface-elevated {
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+}
+
+.muted {
+  color: var(--muted-foreground);
+}
+
+.focus-ring:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ring);
+}
+
+[data-sonner-toaster] [data-sonner-toast].loomin-toast {
+  backdrop-filter: blur(3px);
+  border: 1px solid var(--border);
+}
+
+[data-sonner-toaster] [data-sonner-toast].loomin-toast [data-title] {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-type="success"].loomin-toast {
+  border-color: rgba(16, 185, 129, 0.45);
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-type="error"].loomin-toast {
+  border-color: rgba(239, 68, 68, 0.45);
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-type="loading"].loomin-toast {
+  border-color: rgba(56, 189, 248, 0.45);
+}
+
+.app-grid {
+  background-image:
+    radial-gradient(circle at 18% 15%, color-mix(in srgb, var(--accent) 4%, transparent) 0%, transparent 58%),
+    radial-gradient(circle at 85% 0%, color-mix(in srgb, #18a4ff 3%, transparent) 0%, transparent 52%);
+}
+
+.post-analytics {
+  background: #0b1930;
+  color: #deecff;
+}
+
+.post-analytics .analytics-card {
+  background: #112643;
+  border: 1px solid #2a4061;
+}
+
+.post-analytics .analytics-card-soft {
+  background: #173053;
+  border: 1px solid #2a4061;
+}
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(calc(-100% - var(--gap)));
+  }
+}
+
+.animate-marquee {
+  animation-name: marquee;
+  animation-duration: var(--duration);
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+@keyframes marquee-vertical {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(calc(-100% - var(--gap)));
+  }
+}
+
+.animate-marquee-vertical {
+  animation-name: marquee-vertical;
+  animation-duration: var(--duration);
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+@layer components {
+  .ui-panel {
+    @apply rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-[0_14px_34px_rgba(2,8,20,0.38)];
+  }
+
+  .ui-input {
+    @apply w-full rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] px-3 py-2.5 text-sm text-[var(--foreground)] outline-none transition;
+    @apply placeholder:text-[color:color-mix(in_srgb,var(--muted)_90%,white_10%)];
+    @apply focus:border-sky-500/70 focus:ring-2 focus:ring-sky-500/25;
+  }
+
+  .ui-select {
+    @apply w-full appearance-none rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] px-3 py-2.5 pr-9 text-sm text-[var(--foreground)] outline-none transition;
+    @apply placeholder:text-[color:color-mix(in_srgb,var(--muted)_90%,white_10%)];
+    @apply focus:border-sky-500/70 focus:ring-2 focus:ring-sky-500/25;
+    background-image:
+      linear-gradient(45deg, transparent 50%, #94a3b8 50%),
+      linear-gradient(135deg, #94a3b8 50%, transparent 50%);
+    background-position:
+      calc(100% - 16px) calc(50% - 1px),
+      calc(100% - 10px) calc(50% - 1px);
+    background-size: 6px 6px, 6px 6px;
+    background-repeat: no-repeat;
+  }
+
+  .ui-btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-[linear-gradient(130deg,#2277c8,#149dd8)] px-4 py-2.5 text-sm font-semibold text-white transition;
+    @apply hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 disabled:cursor-not-allowed disabled:opacity-65;
+  }
+
+  .ui-btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-elevated)] px-4 py-2.5 text-sm font-medium text-[var(--foreground)] transition;
+    @apply hover:border-[var(--border-strong)] hover:bg-[color:color-mix(in_srgb,var(--surface-elevated)_84%,#0ea5e9_16%)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/30;
+  }
+
+  .ui-btn-danger {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition;
+    @apply hover:bg-red-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/50 disabled:cursor-not-allowed disabled:opacity-65;
+  }
+
+  .ui-dialog-backdrop {
+    @apply fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm;
+  }
+
+  .ui-dialog-panel {
+    @apply w-full rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-[0_30px_80px_rgba(0,0,0,0.45)];
+  }
+}
+
