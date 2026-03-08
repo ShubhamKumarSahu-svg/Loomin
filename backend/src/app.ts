@@ -1,4 +1,5 @@
 import express from "express";
+import type { Request, Response } from "express";
 import cors from "cors";
 import authRoutes from "./routes/authRoutes.js";
 import oauthRoutes from "./routes/oauthRoutes.js";
@@ -41,7 +42,7 @@ app.use("/api/posts", postRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/", devRoutes);
 
-app.get("/health", (_req, res) => {
+app.get("/health", (_req:Request, res: Response) => {
   res.status(200).json({ status: "Backend running" });
 });
 
