@@ -13,7 +13,7 @@ const router = express.Router();
 router.post("/login", login);
 router.post("/signup", signup);
 router.post("/logout", logout);
-router.get("/check", protectRoute, checkAuth);
+router.get("/check", checkAuth);
 router.get('/linkedin/url', getLinkedInOAuthUrl);
 router.get('/linkedin/callback', handleLinkedInCallback);
 
