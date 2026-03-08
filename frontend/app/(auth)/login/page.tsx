@@ -49,7 +49,7 @@ export default function Login() {
               Resume your <br /> <span className="text-sky-500">operations.</span>
             </h2>
             <p className="max-w-70 text-sm leading-relaxed text-gray-500">
-              Secure uplink to your brand &apos; autonomous content infrastructure.
+              Secure uplink to your brand&apos;s autonomous content infrastructure.
             </p>
           </div>
         </div>
@@ -66,7 +66,7 @@ export default function Login() {
 
         <div className="relative w-full max-w-md space-y-8">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Sign In</h1>
+            <h1 className="text-3xl font-bold tracking-tight">Sign In</h1>
             <p className="mt-2 text-sm text-gray-500">Access your workspace via secure credentials.</p>
           </div>
 
