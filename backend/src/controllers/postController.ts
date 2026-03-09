@@ -85,6 +85,13 @@ interface Workflow1Input {
   platforms?: Platform[];
 }
 
+interface Workflow15Payload extends Workflow2PublishPayload {
+  platforms_to_edit?: Platform[];
+  human_preference?: string | undefined;
+  image_preference?: string | undefined;
+  image_prompt_current?: Record<string, unknown> | undefined;
+}
+
 const normalizeWebhookData = <T>(data: unknown): T => {
   if (Array.isArray(data) && data.length > 0) return data[0] as T;
   return data as T;
@@ -247,17 +254,17 @@ const mapPostToFrontend = (post: {
       drafts.length > 0
         ? drafts
         : [
-            {
-              platform: "linkedin" as const,
-              content: fallbackContent,
-              imageUrl: safeText(post.image_url),
-              hashtags: [],
-              version: 1,
-              status: reviewStatus,
-              aiGenerated: true,
-              updatedAt: post.created_at.toISOString(),
-            },
-          ],
+          {
+            platform: "linkedin" as const,
+            content: fallbackContent,
+            imageUrl: safeText(post.image_url),
+            hashtags: [],
+            version: 1,
+            status: reviewStatus,
+            aiGenerated: true,
+            updatedAt: post.created_at.toISOString(),
+          },
+        ],
     overallStatus: reviewStatus,
     imageUrl: safeText(post.image_url),
     createdAt: post.created_at.toISOString(),
@@ -327,13 +334,13 @@ export const generatePostDraft = async (
       res.status(404).json({ message: "Brand not found" });
       return;
     }
-    
+
     const requestedPlatforms = parsePlatforms(req.body.platforms);
     const incomingReferenceImage = safeText(req.body.reference_image_url) ?? "";
     const persistedReferenceImageUrl = isDataImageUrl(incomingReferenceImage)
       ? (await persistImageUrl(incomingReferenceImage, {
-          folder: "loomin-ai/reference-images",
-        })) ?? incomingReferenceImage
+        folder: "loomin-ai/reference-images",
+      })) ?? incomingReferenceImage
       : incomingReferenceImage;
 
     const workflow1Payload: Workflow1Input = {
@@ -381,7 +388,7 @@ export const generatePostDraft = async (
     const persistedImageUrl = await persistImageUrl(
       safeText(workflow1Data.image_url) ?? persistedReferenceImageUrl,
       {
-      folder: "loomin-ai/drafts",
+        folder: "loomin-ai/drafts",
       }
     );
 
@@ -480,9 +487,9 @@ export const publishDraftPost = async (
         content: post?.content,
         platforms: Array.isArray(post?.platforms)
           ? post?.platforms.filter(
-              (platform): platform is Platform =>
-                platform === "linkedin" || platform === "instagram" || platform === "reddit"
-            )
+            (platform): platform is Platform =>
+              platform === "linkedin" || platform === "instagram" || platform === "reddit"
+          )
           : undefined,
         image_url: safeText(post?.image_url),
       } as Workflow1Output);
@@ -512,8 +519,8 @@ export const publishDraftPost = async (
 
     const resolvedTags = Array.isArray(workflow1Data.tags)
       ? workflow1Data.tags.filter(
-          (tag): tag is string => typeof tag === "string" && tag.trim().length > 0
-        )
+        (tag): tag is string => typeof tag === "string" && tag.trim().length > 0
+      )
       : [];
 
     const resolvedDefaultTitle =
@@ -604,9 +611,9 @@ export const publishDraftPost = async (
           ...(workflow2Data?.ai_response ? { ai_response: workflow2Data.ai_response } : {}),
           ...(hasSuccessfulPublish
             ? {
-                review_status: "published",
-                published_at: now,
-              }
+              review_status: "published",
+              published_at: now,
+            }
             : {}),
         },
       },
@@ -731,6 +738,198 @@ export const approvePost = async (
     res.status(200).json(mapPostToFrontend(post));
   } catch (error) {
     console.error("approvePost error:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+
+export const improvePostDraft = async (
+  req: Request<{ postId: string }, {}, any>,
+  res: Response
+): Promise<void> => {
+  try {
+    const workflow15Url = process.env.N8N_WORKFLOW_1_5_URL;
+
+    if (!workflow15Url) {
+      res.status(500).json({ message: "N8N_WORKFLOW_1_5_URL not configured" });
+      return;
+    }
+
+    const { postId } = req.params;
+
+    const post = await Post.findOne({
+      _id: postId,
+      user_id: req.user!._id.toString(),
+      status: { $ne: "deleted" },
+    }).lean();
+
+    if (!post) {
+      res.status(404).json({ message: "Post not found" });
+      return;
+    }
+
+    const body = req.body ?? {};
+
+    /**
+     * Build payload EXACTLY as required by Workflow 1.5
+     */
+    const workflowPayload = {
+      userId: safeText(body.userId) ?? req.user!._id.toString(),
+      userEmail: safeText(body.userEmail) ?? req.user!.email,
+      brand_name: safeText(body.brand_name) ?? "",
+
+      image_url:
+        safeText(body.image_url) ??
+        safeText(post.image_url) ??
+        "",
+
+      content:
+        typeof body.content === "object"
+          ? body.content
+          : typeof post.content === "object"
+            ? post.content
+            : {},
+
+      title: {
+        default: safeText(body?.title?.default) ?? "Untitled",
+        reddit: safeText(body?.title?.reddit) ?? "",
+      },
+
+      tags: Array.isArray(body.tags)
+        ? body.tags.filter((t: unknown) => typeof t === "string")
+        : [],
+
+      platforms: parsePlatforms(body.platforms) ?? [],
+
+      scheduled_time: body.scheduled_time ?? null,
+
+      platforms_to_edit: parsePlatforms(body.platforms_to_edit) ?? [],
+
+      human_preference: safeText(body.human_preference) ?? "",
+
+      image_preference: safeText(body.image_preference) ?? "",
+
+      image_prompt_current:
+        typeof body.image_prompt_current === "object"
+          ? body.image_prompt_current
+          : {},
+    };
+
+    console.log("Workflow1.5 payload:", workflowPayload);
+
+    /**
+     * Call n8n workflow
+     */
+    const workflowRes = await axios.post(workflow15Url, workflowPayload, {
+      timeout: 120000,
+    });
+
+    const workflowData = normalizeWebhookData<Workflow1Output>(workflowRes.data);
+
+    if (!workflowData || !workflowData.content) {
+      res.status(502).json({
+        message: "Workflow 1.5 returned invalid payload",
+      });
+      return;
+    }
+
+    /**
+     * Persist improved image if returned
+     */
+    const persistedImageUrl = await persistImageUrl(
+      safeText(workflowData.image_url) ?? safeText(post.image_url),
+      { folder: "loomin-ai/drafts" }
+    );
+
+    /**
+     * Update draft in DB
+     */
+    const updated = await Post.findOneAndUpdate(
+      { _id: postId },
+      {
+        $set: {
+          content: workflowData.content,
+          image_url: persistedImageUrl,
+          review_status: "awaiting_review",
+        },
+      },
+      { new: true }
+    ).lean();
+
+    res.status(200).json({
+      post: mapPostToFrontend(updated!),
+      workflow1_5: workflowData,
+    });
+  } catch (error) {
+    console.error("improvePostDraft error:", error);
+
+    if (axios.isAxiosError(error)) {
+      res.status(502).json({
+        message:
+          (error.response?.data as any)?.message ??
+          error.message ??
+          "Workflow 1.5 failed",
+      });
+      return;
+    }
+
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+export const rejectPostDraft = async (
+  req: Request<{ postId: string }>,
+  res: Response
+): Promise<void> => {
+  try {
+    const { postId } = req.params;
+
+    if (!postId) {
+      res.status(400).json({ message: "postId is required" });
+      return;
+    }
+
+    const authUserId = req.user!._id.toString();
+
+    const post = await Post.findOneAndUpdate(
+      {
+        _id: postId,
+        user_id: authUserId,
+        status: { $ne: "deleted" },
+      },
+      {
+        $set: {
+          review_status: "rejected",
+            status: "deleted"
+        },
+      },
+      { new: true }
+    ).lean();
+
+    if (!post) {
+      res.status(404).json({ message: "Post not found" });
+      return;
+    }
+
+    await createNotification({
+      userId: authUserId,
+      brandId: post.brandId,
+      postId: post._id,
+      type: "post_rejected",
+      title: "Post rejected",
+      message: "The draft was rejected and removed from the publishing queue.",
+      metadata: {
+        rejectedAt: new Date().toISOString(),
+      },
+      eventKey: `post_rejected:${authUserId}:${post._id}`,
+    });
+
+    res.status(200).json({
+      post: mapPostToFrontend(post),
+    });
+
+  } catch (error) {
+    console.error("rejectPostDraft error:", error);
     res.status(500).json({ message: "Internal server error" });
   }
 };

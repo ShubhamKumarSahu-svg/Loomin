@@ -49,6 +49,37 @@ export interface Workflow1OutputPayload {
   scheduled_time?: string | null;
 }
 
+export interface ImproveWorkflowPayload {
+  userId: string;
+  userEmail: string;
+  brand_name: string;
+  post_details: string;
+  content: Partial<Record<"linkedin" | "instagram" | "reddit", string>>;
+  title: {
+    default: string;
+    reddit?: string;
+  };
+
+  tags: string[];
+
+  platforms: Array<"linkedin" | "instagram" | "reddit">;
+
+  scheduled_time: string | null;
+
+  platforms_to_edit?: Array<"linkedin" | "instagram" | "reddit">;
+
+  human_preference?: string;
+
+  image_preference?: string;
+
+  image_prompt_current?: {
+    subject?: string;
+    environment?: string;
+    lighting?: string;
+    style?: string;
+  };
+}
+
 export const getPosts = async (brandId: string): Promise<Post[]> => {
   const params = new URLSearchParams({ brandId });
   return apiRequest<Post[]>(`/api/posts?${params.toString()}`, {
@@ -90,4 +121,22 @@ export const generateDraft = async (
 ): Promise<Post> => {
   const response = await generateDraftPost(payload);
   return response.post;
+};
+
+
+export const improveDraftPost = async (
+  postId: string,
+  payload: ImproveWorkflowPayload
+): Promise<Post> => {
+  return apiRequest<Post>(`/api/posts/${postId}/improve`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+};
+
+
+export const rejectDraftPost = async (postId: string): Promise<Post> => {
+  return apiRequest<Post>(`/api/posts/${postId}/reject`, {
+    method: "POST",
+  });
 };

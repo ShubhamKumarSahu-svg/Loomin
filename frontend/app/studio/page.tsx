@@ -2,8 +2,8 @@
 
 import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { 
-  CalendarClock, ChevronDown, ChevronUp, Plus, Send, X, 
+import {
+  CalendarClock, ChevronDown, ChevronUp, Plus, Send, X,
   Sparkles, Layout, CheckCircle2
 } from "lucide-react";
 import Image from "next/image";
@@ -15,6 +15,8 @@ import {
   generateDraftPost,
   getPosts,
   publishDraftPost,
+  improveDraftPost,
+  rejectDraftPost,
   type GenerateWorkflow1Payload,
   type Workflow1OutputPayload,
   type Workflow2OutputPayload,
@@ -82,6 +84,15 @@ export default function StudioPage() {
   const [editedContentByPost, setEditedContentByPost] = useState<Record<string, Record<string, string>>>({});
   const generatingToastIdRef = useRef<string | number | null>(null);
   const publishingToastIdRef = useRef<string | number | null>(null);
+  const improvingToastIdRef = useRef<string | number | null>(null);
+  const [improveDialogPost, setImproveDialogPost] = useState<Post | null>(null);
+
+  const [improveForm, setImproveForm] = useState({
+    human_preference: "",
+    platforms_to_edit: [] as PublishPlatform[],
+    image_preference: "generate_new",
+    image_prompt_current: "",
+  });
 
   const resetDialogForm = () => setForm(initialState);
   const openDialog = () => {
@@ -261,9 +272,62 @@ export default function StudioPage() {
     },
   });
 
+  const improveMutation = useMutation({
+    mutationFn: async ({
+      postId,
+      payload,
+    }: {
+      postId: string;
+      payload: any;
+    }) => improveDraftPost(postId, payload),
+
+    onMutate: () => {
+      improvingToastIdRef.current = toast.loading("Improving draft...");
+    },
+
+    onSuccess: (response, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["posts"] });
+
+      // reset edited content so new server content appears
+      setEditedContentByPost((prev) => {
+        const updated = { ...prev };
+        delete updated[variables.postId];
+        return updated;
+      });
+
+      toast.success("Draft improved successfully.", {
+        id: improvingToastIdRef.current ?? undefined
+      });
+
+      improvingToastIdRef.current = null;
+    },
+
+    onError: (error) => {
+      toast.error(error.message || "Failed to improve draft.", {
+        id: improvingToastIdRef.current ?? undefined
+      });
+      improvingToastIdRef.current = null;
+    }
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: async (postId: string) => rejectDraftPost(postId),
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["posts"] });
+      toast.success("Draft rejected.");
+    },
+
+    onError: (error) => {
+      toast.error(error.message || "Failed to reject draft.");
+    },
+  });
+
+
+
   return (
     <div className="mx-auto max-w-5xl p-6 space-y-10 bg-[#0A0A0A] text-white min-h-screen">
-      
+
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-white/5 pb-10">
         <div className="space-y-2">
           <div className="flex items-center gap-2 text-sky-400 text-[10px] font-bold uppercase tracking-[0.2em]">
@@ -282,7 +346,7 @@ export default function StudioPage() {
         </button>
       </div>
 
-      
+
       <div className="inline-flex flex-wrap items-center gap-6 rounded-2xl border border-white/5 bg-white/5 px-6 py-4 backdrop-blur-md">
         <div className="flex items-center gap-3 border-r border-white/10 pr-6">
           <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -295,13 +359,13 @@ export default function StudioPage() {
         </div>
       </div>
 
-      
+
       <section className="space-y-6">
         <div className="flex items-center gap-2 border-b border-white/5 pb-4">
           <Layout size={18} className="text-gray-500" />
           <h2 className="text-lg font-medium tracking-tight">Draft Queue</h2>
         </div>
-        
+
         {draftPosts.length === 0 ? (
           <div className="rounded-[2rem] border border-dashed border-white/10 py-24 text-center">
             <p className="text-gray-500 text-sm font-light italic">No pending drafts in the synthesis engine.</p>
@@ -312,12 +376,16 @@ export default function StudioPage() {
               const availablePlatforms = getAvailablePlatformsForPost(post);
               const selectedPlatforms = getSelectedPlatformsForPost(post);
               const isExpanded = Boolean(expandedByPost[post.id]);
+              const editContent = editedContentByPost[post.id] ??
+                post.platformDrafts.reduce<Record<string, string>>((acc, draft) => {
+                  acc[draft.platform] = draft.content
+                  return acc
+                }, {})
               return (
                 <div
                   key={post.id}
-                  className={`group overflow-hidden rounded-[1.5rem] border transition-all duration-300 ${
-                    isExpanded ? "border-white/20 bg-[#121212]" : "border-white/5 bg-white/[0.02] hover:bg-white/[0.04]"
-                  }`}
+                  className={`group overflow-hidden rounded-[1.5rem] border transition-all duration-300 ${isExpanded ? "border-white/20 bg-[#121212]" : "border-white/5 bg-white/[0.02] hover:bg-white/[0.04]"
+                    }`}
                 >
                   <div className="p-6">
                     <div className="flex items-center justify-between gap-4">
@@ -327,7 +395,7 @@ export default function StudioPage() {
                       </div>
                       <div className="flex items-center gap-4">
                         <span className="hidden md:block text-[10px] text-gray-500 uppercase tracking-widest">
-                          {post.platformDrafts.map((d) => d.platform).join(" â€¢ ")}
+                          {post.platformDrafts.map((d) => d.platform).join(" • ")}
                         </span>
                         <button
                           type="button"
@@ -427,40 +495,72 @@ export default function StudioPage() {
                             )}
                           </div>
 
-                          <div className="space-y-3">
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Schedule Time (Optional)</p>
-                            <div className="relative">
-                              <CalendarClock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600" />
-                              <input
-                                type="datetime-local"
-                                value={scheduleByPost[post.id] ?? ""}
-                                onChange={(e) => setScheduleByPost((prev) => ({ ...prev, [post.id]: e.target.value }))}
-                                className="bg-white/5 border border-white/10 rounded-xl px-10 py-3 text-sm focus:outline-none focus:border-sky-500/50 transition-colors"
-                              />
-                            </div>
-                          </div>
+                          
 
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const selectedContent = post.platformDrafts
-                                .filter((draft) => selectedPlatforms.includes(draft.platform as PublishPlatform))
-                                .reduce<NonNullable<Workflow1OutputPayload["content"]>>((acc, draft) => {
-                                  acc[draft.platform] =
-                                    editedContentByPost[post.id]?.[draft.platform] ?? draft.content;
-                                  return acc;
-                                }, {});
-                              publishMutation.mutate({
-                                postId: post.id,
-                                scheduledAt: scheduleByPost[post.id],
-                                workflow1Output: { content: selectedContent, platforms: selectedPlatforms },
-                              });
-                            }}
-                            disabled={publishMutation.isPending || selectedPlatforms.length === 0}
-                            className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-30 disabled:grayscale px-10 py-3 rounded-2xl text-sm font-bold transition-all flex items-center gap-2"
-                          >
-                            <Send size={16} /> Deploy Post
-                          </button>
+                          <div className="flex items-center gap-4 p-4 ">
+
+                            
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setImproveDialogPost(post);
+                                setImproveForm({
+                                  human_preference: "",
+                                  platforms_to_edit: selectedPlatforms,
+                                  image_preference: "generate_new",
+                                  image_prompt_current: "",
+                                });
+                              }}
+                              className="group relative flex items-center gap-2 px-6 py-3 bg-sky-500/10 border border-sky-500/20 hover:bg-sky-500/20 rounded-2xl text-sky-400 text-sm font-bold transition-all active:scale-95"
+                            >
+                              <svg className="w-4 h-4 transition-transform group-hover:rotate-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                              </svg>
+                              Improve
+                            </button>
+
+                            {/* Reject Button */}
+                            <button
+                              type="button"
+                              onClick={() => rejectMutation.mutate(post.id)}
+                              className="flex items-center gap-2 px-6 py-3 bg-white/5 border border-white/10 hover:bg-red-500/10 hover:border-red-500/20 hover:text-red-400 rounded-2xl text-gray-400 text-sm font-bold transition-all active:scale-95"
+                            >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                              Reject
+                            </button>
+
+                            {/* Accept & Deploy Button - The Hero Action */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const selectedContent = post.platformDrafts
+                                  .filter((draft) =>
+                                    selectedPlatforms.includes(draft.platform as PublishPlatform)
+                                  )
+                                  .reduce((acc: any, draft) => {
+                                    acc[draft.platform] =
+                                      editedContentByPost[post.id]?.[draft.platform] ?? draft.content;
+                                    return acc;
+                                  }, {});
+
+                                publishMutation.mutate({
+                                  postId: post.id,
+                                  scheduledAt: scheduleByPost[post.id],
+                                  workflow1Output: {
+                                    content: selectedContent,
+                                    platforms: selectedPlatforms,
+                                  },
+                                });
+                              }}
+                              className="flex-1 flex items-center justify-center gap-2 px-8 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl text-sm font-black shadow-lg shadow-emerald-900/20 transition-all hover:shadow-emerald-500/20 active:scale-[0.98] border-t border-white/20"
+                            >
+                              <Send size={16} className="transition-transform group-hover:translate-x-1 group-hover:-translate-y-1" />
+                              Accept & Deploy
+                            </button>
+
+                          </div>
                         </div>
                       </div>
                     )}
@@ -472,7 +572,181 @@ export default function StudioPage() {
         )}
       </section>
 
-      
+
+      {improveDialogPost && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-md bg-black/70 animate-in fade-in duration-300">
+          <div className="w-full max-w-lg rounded-[2.5rem] border border-white/10 bg-[#0F0F0F] shadow-2xl overflow-hidden">
+
+            {/* Header */}
+            <div className="p-8 pb-0 flex justify-between items-center">
+              <div>
+                <h3 className="text-2xl font-semibold text-white tracking-tight">Improve Draft</h3>
+                <p className="text-sm text-gray-400 mt-1">Refine your content with specific AI instructions.</p>
+              </div>
+              <div className="h-10 w-10 rounded-full bg-sky-500/10 flex items-center justify-center border border-sky-500/20">
+                <svg className="w-5 h-5 text-sky-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+              </div>
+            </div>
+
+            <div className="p-8 pt-6 space-y-6">
+              {/* Instruction Section */}
+              <div className="space-y-3">
+                <label className="text-[10px] font-bold text-sky-500 uppercase tracking-[0.15em] ml-1">
+                  Human Preference
+                </label>
+                <textarea
+                  value={improveForm.human_preference}
+                  onChange={(e) =>
+                    setImproveForm((prev) => ({
+                      ...prev,
+                      human_preference: e.target.value,
+                    }))
+                  }
+                  className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-sky-500/40 focus:border-sky-500/50 transition-all min-h-[100px] resize-none"
+                  placeholder="e.g. 'Make it sound more professional' or 'Add a call to action'..."
+                />
+              </div>
+
+              {/* Mid-Section Grid */}
+              <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-3">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.15em] ml-1">
+                    Platforms To Edit
+                  </label>
+                  <div className="flex flex-col gap-2 p-1">
+                    {(["linkedin", "instagram"] as const).map((platform) => (
+                      <label
+                        key={platform}
+                        className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${improveForm.platforms_to_edit.includes(platform)
+                            ? "bg-sky-500/10 border-sky-500/40 text-sky-400"
+                            : "bg-white/5 border-white/5 text-gray-400 hover:bg-white/10"
+                          }`}
+                      >
+                        <input
+                          type="checkbox"
+                          className="hidden"
+                          checked={improveForm.platforms_to_edit.includes(platform)}
+                          onChange={(e) => {
+                            setImproveForm((prev) => {
+                              if (e.target.checked) {
+                                return { ...prev, platforms_to_edit: [...prev.platforms_to_edit, platform] };
+                              }
+                              return { ...prev, platforms_to_edit: prev.platforms_to_edit.filter((p) => p !== platform) };
+                            });
+                          }}
+                        />
+                        <span className="text-xs font-medium capitalize">{platform}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-3 text-white">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.15em] ml-1">
+                    Image Preference
+                  </label>
+                  <select
+                    value={improveForm.image_preference}
+                    onChange={(e) =>
+                      setImproveForm((prev) => ({
+                        ...prev,
+                        image_preference: e.target.value,
+                      }))
+                    }
+                    className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-xs text-gray-300 focus:outline-none focus:border-sky-500/50 appearance-none"
+                  >
+                    <option className="bg-[#121212]" value="generate_new">Generate New</option>
+                    <option className="bg-[#121212]" value="use_image">Use Existing</option>
+                    <option className="bg-[#121212]" value="no_image">No Image</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Image Prompt Section */}
+              <div className="space-y-3">
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.15em] ml-1">
+                  Image Prompt
+                </label>
+                <div className="relative group">
+                  <input
+                    value={improveForm.image_prompt_current}
+                    onChange={(e) =>
+                      setImproveForm((prev) => ({
+                        ...prev,
+                        image_prompt_current: e.target.value,
+                      }))
+                    }
+                    className="w-full bg-white/5 border border-white/10 rounded-xl p-4 pl-11 text-sm text-gray-200 focus:outline-none focus:border-sky-500/50 transition-all"
+                    placeholder="Describe visual elements, style, lighting..."
+                  />
+                  <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 group-focus-within:text-sky-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-3 pt-6 border-t border-white/5">
+                <button
+                  onClick={() => setImproveDialogPost(null)}
+                  className="px-6 py-2.5 text-sm font-medium text-gray-400 hover:text-white transition-colors"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  onClick={() => {
+                    if (!improveDialogPost) return;
+                    const editContent =
+                      editedContentByPost[improveDialogPost.id] ??
+                      improveDialogPost.platformDrafts.reduce<Record<string, string>>(
+                        (acc, draft) => {
+                          acc[draft.platform] = draft.content;
+                          return acc;
+                        },
+                        {}
+                      );
+
+                    improveMutation.mutate({
+                      postId: improveDialogPost.id,
+                      payload: {
+                        userId: user?._id,
+                        userEmail: user?.email,
+                        brand_name: activeBrand?.name ?? "",
+                        image_url: improveDialogPost.imageUrl ?? "",
+                        content: editContent,
+                        title: {
+                          default: improveDialogPost.masterBrief.topic ?? "Untitled",
+                          reddit: "",
+                        },
+                        tags: [],
+                        platforms: improveForm.platforms_to_edit,
+                        scheduled_time: null,
+                        platforms_to_edit: improveForm.platforms_to_edit,
+                        human_preference: improveForm.human_preference,
+                        image_preference: improveForm.image_preference,
+                        image_prompt_current: {
+                          subject: improveForm.image_prompt_current,
+                          environment: "",
+                          lighting: "",
+                          style: "",
+                        },
+                      },
+                    });
+                    setImproveDialogPost(null);
+                  }}
+                  className="bg-sky-600 hover:bg-sky-500 text-white px-8 py-3 rounded-2xl font-bold text-sm shadow-lg shadow-sky-600/20 active:scale-95 transition-all"
+                >
+                  Improve Draft
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {open && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 backdrop-blur-xl bg-black/60">
           <div className="w-full max-w-2xl overflow-hidden rounded-[2.5rem] border border-white/10 bg-[#121212] shadow-2xl animate-in zoom-in-95">
@@ -615,7 +889,7 @@ export default function StudioPage() {
               </label>
             </div>
 
-            <div className="flex items-center justify-end gap-6 border-t border-white/5 px-8 py-6 bg-white/[0.01]">
+            <div className="flex items-center justify-end gap-6 border-t border-white/5 px-8 py-6 bg-white/1">
               <button onClick={closeDialog} className="text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-white transition-colors">
                 Cancel
               </button>
@@ -632,6 +906,8 @@ export default function StudioPage() {
         </div>
       )}
     </div>
+
+
   );
 }
 
@@ -639,8 +915,8 @@ const IMAGE_PREFERENCE_OPTIONS: Array<{
   label: string;
   value: FormState["imagePreference"];
 }> = [
-  { label: "Use provided image", value: "use_image" },
-  { label: "Generate new image", value: "generate_new" },
-  { label: "Use reference image", value: "use_reference" },
-  { label: "No image", value: "no_image" },
-];
+    { label: "Use provided image", value: "use_image" },
+    { label: "Generate new image", value: "generate_new" },
+    { label: "Use reference image", value: "use_reference" },
+    { label: "No image", value: "no_image" },
+  ];

@@ -4,7 +4,10 @@ import { Schema, model } from "mongoose";
 export type NotificationType =
   | "post_generated"
   | "post_published"
-  | "analytics_ready";
+  | "analytics_ready"
+  | "post_improved"
+  | "post_rejected"
+  
 
 export interface INotification {
   _id: string;
