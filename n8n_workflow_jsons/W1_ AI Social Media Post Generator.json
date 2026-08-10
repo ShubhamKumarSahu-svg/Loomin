@@ -1,0 +1,1308 @@
+{
+  "name": "W1: AI Social Media Post Generator",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "social-media-automation",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "e7b83ff2-d8be-4f95-8fea-1160e505035f",
+      "name": "Webhook Input",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -4720,
+        -752
+      ],
+      "webhookId": "bc6cf545-298d-48c5-81f4-f7d46bb31dc3"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json.body;\n\nconst state = {\n  userId: input.userId || \"\",\n  userEmail: input.userEmail || \"\",\n\n  topic: input.topic || \"\",\n  tone: input.tone || \"\",\n  post_details: input.post_details || \"\",\n  context: input.context || \"\",\n  brand_name: input.brand_name || \"\",\n\n  brand: {\n    brand_name: \"\",\n    brand_colors: [],\n    brand_style: \"\",\n    brand_text: \"\",\n    logo_url: \"\",\n    logo_position: \"top-right\"\n  },\n\n  image_preference: input.image_preference || \"generate_new\",\n  reference_image_url: input.reference_image_url || \"\",\n  image_url: input.image_url || \"\",\n\n  linkedin_post: \"\",\n  instagram_post: \"\",\n  reddit_post: \"\",\n  twitter_post: \"\",\n  facebook_post: \"\",\n\n  platforms: Array.isArray(input.platforms) \n    ? input.platforms.map(p => String(p).toLowerCase().trim())\n    : [\"linkedin\", \"instagram\", \"reddit\", \"twitter\", \"facebook\"],\n\n  image_prompt_current: \"\",\n  reference_analysis: \"\",\n\n  approved: false,\n  critique: \"\",\n\n  retries_left: 3,\n  image_retries_left: 3\n};\n\nreturn [{ json: state }];"
+      },
+      "id": "90ed4bfb-fea2-47b6-8ebb-c555f29edf8e",
+      "name": "Initialize State",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -4560,
+        -752
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"llama-3.3-70b-versatile\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are an expert social media content strategist and copywriter.\\n\\nYour task is to generate high-quality, platform-specific social media posts, titles, and tags.\\n\\n==============================\\n🚨 CRITICAL PLATFORM CONTROL\\n==============================\\n\\n- ONLY generate content for platforms explicitly listed in the 'PLATFORMS' array provided by the user.\\n- Supported platforms are: linkedin, facebook, instagram, reddit, twitter.\\n- For platforms NOT requested → you MUST return an empty string \\\"\\\".\\n- NEVER generate content for unrequested platforms.\\n\\n==============================\\n📏 POST LENGTH CONTROL\\n==============================\\n\\n- If user provides post length → STRICTLY follow it.\\n- If NOT provided → generate MEDIUM length (50–100 words).\\n- Twitter must ALWAYS be <= 280 characters.\\n\\n==============================\\n⚠️ STRICT OUTPUT RULES\\n==============================\\n\\n- Return ONLY valid JSON.\\n- No markdown, no explanation, no extra text.\\n- All fields in the output format MUST exist.\\n- Missing/Unrequested platform posts (and platform-specific titles like title_reddit) MUST be \\\"\\\".\\n- Do NOT include titles inside posts.\\n- Avoid repetition across platforms; tailor the message to the platform's audience.\\n\\n==============================\\n📦 OUTPUT FORMAT (STRICT JSON)\\n==============================\\n\\n{\\n  \\\"linkedin_post\\\": \\\"\\\",\\n  \\\"facebook_post\\\": \\\"\\\",\\n  \\\"instagram_post\\\": \\\"\\\",\\n  \\\"reddit_post\\\": \\\"\\\",\\n  \\\"twitter_post\\\": \\\"\\\",\\n  \\\"title_default\\\": \\\"\\\",\\n  \\\"title_reddit\\\": \\\"\\\",\\n  \\\"tags\\\": []\\n}\\n\\n==============================\\n🏷 TAG RULES\\n==============================\\n\\n- 5 to 8 tags.\\n- Lowercase, no spaces (use hyphens), no # symbol.\\n- Highly relevant to the topic & brand.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": {{ JSON.stringify(\"==============================\\n📌 INPUT\\n==============================\\n\\nPLATFORMS REQUESTED:\\n\" + $json.platforms + \"\\n\\nTOPIC:\\n\" + $json.topic + \"\\n\\nTONE:\\n\" + $json.tone + \"\\n\\nCONTEXT:\\n\" + $json.context + \"\\n\\nPOST DETAILS:\\n\" + $json.post_details + \"\\n\\nPOST LENGTH (optional):\\n\" + ($json.post_length || \"Not provided\") + \"\\n\\nBRAND STYLE:\\n\" + ($json.brand?.brand_style || \"General\") + \"\\n\\n==============================\\n🎯 PLATFORM INSTRUCTIONS\\n==============================\\n\\nApply rules ONLY if the platform is in the REQUESTED list.\\n\\nLINKEDIN:\\n- Professional, insightful.\\n- Hook + insight + CTA.\\n- Minimal emojis.\\n\\nFACEBOOK:\\n- Engaging, community-focused.\\n- Conversational tone, encourages sharing and comments.\\n- Clear CTA.\\n\\nINSTAGRAM:\\n- Casual, emotional, visual storytelling.\\n- Use emojis well.\\n- Clear CTA (e.g., link in bio).\\n\\nREDDIT:\\n- Conversational, human tone, zero marketing fluff.\\n- Ask a genuine question to spark debate.\\n\\nTWITTER:\\n- Short, punchy, <= 280 chars.\\n- Strong hook in the first line.\\n- 0–2 relevant hashtags.\\n\\n==============================\\n🧾 TITLE RULES\\n==============================\\n\\nTITLE_DEFAULT: 8–12 words, catchy.\\nTITLE_REDDIT: Curiosity-driven, non-clickbaity. (ONLY generate if 'reddit' is in PLATFORMS REQUESTED, otherwise MUST return \\\"\\\").\\n\\nGenerate the JSON now.\") }}\n    }\n  ],\n  \"temperature\": 0.7,\n  \"response_format\": {\n    \"type\": \"json_object\"\n  }\n}",
+        "options": {}
+      },
+      "id": "56b53976-6a76-4e9f-87b5-156c28e68a3a",
+      "name": "Generate Posts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -4704,
+        -512
+      ],
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "OkAzja5buKrbepBd",
+          "name": "Groq API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. Get FULL state\nlet state;\ntry {\n  state = { ...$('Update Text State').last().json };\n} catch (e) {\n  state = { ...$('Set Brand Context').first().json };\n}\n\n// 2. Get LLM response\nconst response = $input.first().json;\nlet content = response?.choices?.[0]?.message?.content || '{}';\ncontent = content.replace(/```json|```/g, \"\").trim();\n\nif (content.startsWith('\"') && content.endsWith('\"')) {\n  try { content = JSON.parse(content); } catch (e) {}\n}\n\nlet parsed;\ntry {\n  parsed = typeof content === \"string\" ? JSON.parse(content) : content;\n} catch (e) {\n  parsed = {};\n}\n\n// 3. Extract posts\nstate.linkedin_post = (parsed.linkedin_post || \"\").trim();\nstate.facebook_post = (parsed.facebook_post || \"\").trim();\nstate.instagram_post = (parsed.instagram_post || \"\").trim();\nstate.reddit_post = (parsed.reddit_post || \"\").trim();\nstate.twitter_post = (parsed.twitter_post || \"\").trim();\n\n// 4. Extract titles & tags\nstate.title_default = (parsed.title_default || \"\").trim();\nstate.title_reddit = (parsed.title_reddit || \"\").trim();\nif (Array.isArray(parsed.tags)) {\n  state.tags = parsed.tags.map(tag => String(tag).toLowerCase().trim());\n} else {\n  state.tags = [];\n}\n\n// 5. Clean titles from posts\nif (state.title_default) {\n  state.linkedin_post = state.linkedin_post.replace(state.title_default, \"\").trim();\n  state.facebook_post = state.facebook_post.replace(state.title_default, \"\").trim();\n  state.instagram_post = state.instagram_post.replace(state.title_default, \"\").trim();\n}\nif (state.title_reddit) {\n  state.reddit_post = state.reddit_post.replace(state.title_reddit, \"\").trim();\n}\n\n// 6. Strict Platform filtering\nconst platforms = state.platforms || [];\nconst has = (p) => platforms.includes(p);\nif (!has('linkedin')) state.linkedin_post = '';\nif (!has('facebook')) state.facebook_post = '';\nif (!has('instagram')) state.instagram_post = '';\nif (!has('reddit')) state.reddit_post = '';\nif (!has('twitter')) state.twitter_post = '';\n\n// 7. Retries\nstate.retries_left = state.retries_left !== undefined ? Number(state.retries_left) : 3;\nstate.image_retries_left = state.image_retries_left !== undefined ? Number(state.image_retries_left) : 3;\n\nreturn [{ json: state }];"
+      },
+      "id": "195bde75-bc56-4603-b5c8-19e14d463715",
+      "name": "Merge Posts Into State",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -4560,
+        -512
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"llama-3.3-70b-versatile\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are a STRICT social media content critic and brand guardian. Your job is to ensure every post is high-quality, platform-appropriate, and technically compliant.\\n\\n==============================\\n🚨 EVALUATION CRITERIA\\n==============================\\n- TONE CHECK: Does LinkedIn sound professional? Is Reddit free of 'marketing fluff'? Is Instagram engaging?\\n- CHARACTER COUNT: Twitter MUST be <= 280 characters. Mark 'approved': false if it exceeds this.\\n- EMPTY FIELDS: If a platform post is empty or \\\"\\\", do NOT include it in the JSON output.\\n- VALUE ADD: Is the CTA clear? Is the hook strong?\\n\\n==============================\\n📦 OUTPUT FORMAT (STRICT JSON)\\n==============================\\nReturn ONLY a JSON object. No conversational filler.\\n\\n{\\n  \\\"results\\\": {\\n    \\\"linkedin\\\": { \\\"approved\\\": boolean, \\\"critique\\\": \\\"string\\\" },\\n    \\\"facebook\\\": { \\\"approved\\\": boolean, \\\"critique\\\": \\\"string\\\" },\\n    \\\"instagram\\\": { \\\"approved\\\": boolean, \\\"critique\\\": \\\"string\\\" },\\n    \\\"reddit\\\": { \\\"approved\\\": boolean, \\\"critique\\\": \\\"string\\\" },\\n    \\\"twitter\\\": { \\\"approved\\\": boolean, \\\"critique\\\": \\\"string\\\" }\\n  }\\n}\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": {{ JSON.stringify(\"==============================\\n📌 SUBMISSION FOR REVIEW\\n==============================\\nTopic: \" + $json.topic + \"\\nTarget Tone: \" + $json.tone + \"\\n\\nPOSTS TO EVALUATE:\\nLinkedIn: \" + $json.linkedin_post + \"\\nFacebook: \" + $json.facebook_post + \"\\nInstagram: \" + $json.instagram_post + \"\\nReddit: \" + $json.reddit_post + \"\\nTwitter: \" + $json.twitter_post + \"\\n\\nProvide the evaluation JSON now.\") }}\n    }\n  ],\n  \"temperature\": 0.2,\n  \"response_format\": {\n    \"type\": \"json_object\"\n  }\n}",
+        "options": {}
+      },
+      "id": "239a4ca0-bc9c-43f3-80b6-1cb21025d9f1",
+      "name": "Text Critic",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -4400,
+        -512
+      ],
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "XNt3267XjKHTIv7V",
+          "name": "Groq Vinay"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = { ...$('Merge Posts Into State').last().json };\nconst response = $input.first().json;\n\nlet content = response?.choices?.[0]?.message?.content || '{}';\ncontent = content.replace(/```json|```/g, \"\").trim();\n\nlet parsed;\ntry {\n  parsed = JSON.parse(content);\n} catch (e) {\n  parsed = { results: {} };\n}\n\nlet allApproved = true;\nlet critiques = [];\n\n// Dynamically check ONLY the requested platforms\nstate.platforms.forEach(platform => {\n  const pData = parsed.results?.[platform];\n  if (pData) {\n    if (pData.approved === false) {\n      allApproved = false;\n    }\n    if (pData.critique && pData.approved === false) {\n      critiques.push(`${platform.toUpperCase()}: ${pData.critique}`);\n    }\n  }\n});\n\nstate.approved = allApproved;\nstate.critique = critiques.length > 0 ? critiques.join(\" | \") : \"All good.\";\n\nif (!state.approved) {\n  state.retries_left = Math.max((state.retries_left ?? 0) - 1, 0);\n}\n\nreturn [{ json: state }];"
+      },
+      "id": "5723bba4-edf6-4e3a-955c-a0e2a8962d61",
+      "name": "Update Text State",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -4224,
+        -512
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "id-1",
+              "leftValue": "={{ $json.approved }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "false"
+              }
+            },
+            {
+              "id": "id-2",
+              "leftValue": "={{ $json.retries_left }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "0058c53f-5b31-4e9d-83a4-fabba04ffd3a",
+      "name": "Check Text Retry",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -4080,
+        -512
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = { ...$input.first().json };\nstate.image_approved = false;\nstate.image_critique = \"\";\nstate.image_prompt_current = \"\";\nif (state.image_retries_left === undefined || state.image_retries_left === null) {\n  state.image_retries_left = 3;\n}\nreturn [{ json: state }];"
+      },
+      "id": "27092047-6609-4573-9db2-0b5b4142339e",
+      "name": "Reset Image State",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -4736,
+        -16
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.image_preference }}",
+                    "rightValue": "no_image",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "no_image"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.image_preference }}",
+                    "rightValue": "use_image",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "use_image"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.image_preference }}",
+                    "rightValue": "generate_new",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "generate_new"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.image_preference }}",
+                    "rightValue": "use_reference",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "use_reference"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "bb951d94-70e5-49a9-87fb-5fd2b2f4019f",
+      "name": "Image Router",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        -4640,
+        -256
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = { ...$input.first().json };\nstate.image_url = state.reference_image_url || \"\";\nreturn [{ json: state }];"
+      },
+      "id": "84400fa4-e9ec-4c96-aae7-8d4919e49752",
+      "name": "Assign Existing Image",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -4304,
+        -288
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.groq_body }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "a35756d3-4a5b-4c77-ab02-b725fff90a52",
+      "name": "Analyze Reference Image",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -4240,
+        0
+      ],
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "XNt3267XjKHTIv7V",
+          "name": "Groq Vinay"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = { ...$input.first().json };\nlet parsed;\ntry {\n  const content = state.choices?.[0]?.message?.content || \"{}\";\n  parsed = JSON.parse(content);\n} catch (e) { parsed = {}; }\nstate.reference_analysis = parsed.reference_analysis || \"\";\nreturn [{ json: state }];"
+      },
+      "id": "13d82842-4879-4e48-b7f4-1663c6ad9130",
+      "name": "Merge Reference Analysis",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -4096,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"llama-3.3-70b-versatile\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are a world-class AI Image Prompt Engineer specializing in Flux.1, Midjourney v6, and Stable Diffusion XL. Your goal is to translate marketing copy into a visually stunning, high-fidelity image prompt.\\n\\n==============================\\n🎨 PROMPT ENGINEERING RULES\\n==============================\\n- SUBJECT: Be specific. Instead of 'a person,' describe their attire, expression, and action.\\n- STYLE: Defaults to 'Photorealistic' unless the Brand Style dictates otherwise (e.g., 3D render, minimalist vector, oil painting).\\n- LIGHTING: Use cinematic terms (e.g., volumetric lighting, golden hour, rim lighting, softbox studio light).\\n- CAMERA: Specify focal lengths (e.g., 85mm for portraits, 24mm for wide shots) and aperture (e.g., f/1.8 for bokeh).\\n- FLUX OPTIMIZATION: Use descriptive, natural language. Avoid 'photorealistic' buzzwords; describe the texture of skin, fabric, and grain instead.\\n\\n==============================\\n⚠️ OUTPUT CONSTRAINTS\\n==============================\\n- Return ONLY valid JSON.\\n- No markdown, no preamble.\\n- Ensure color_palette strictly adheres to the provided Brand Colors.\\n\\n==============================\\n📦 OUTPUT FORMAT\\n==============================\\n{\\n  \\\"image_prompt_current\\\": {\\n    \\\"subject\\\": \\\"\\\",\\n    \\\"environment\\\": \\\"\\\",\\n    \\\"composition\\\": \\\"\\\",\\n    \\\"lighting\\\": \\\"\\\",\\n    \\\"style\\\": \\\"\\\",\\n    \\\"mood\\\": \\\"\\\",\\n    \\\"color_palette\\\": \\\"\\\",\\n    \\\"camera\\\": \\\"\\\",\\n    \\\"quality\\\": \\\"\\\",\\n    \\\"negative_prompt\\\": \\\"\\\"\\n  }\\n}\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": {{ JSON.stringify(\"==============================\\n📌 INPUT\\n==============================\\nTopic: \" + $json.topic + \"\\nContext: \" + $json.context + \"\\n\\nPOSTS CONTENT FOR VISUAL CUES:\\nLinkedIn: \" + $json.linkedin_post + \"\\nFacebook: \" + $json.facebook_post + \"\\nInstagram: \" + $json.instagram_post + \"\\nTwitter: \" + $json.twitter_post + \"\\n\\nBRAND ASSETS:\\nBrand Style: \" + ($json.brand?.brand_style || \"Professional\") + \"\\nBrand Colors: \" + ($json.brand?.brand_colors || \"Not specified\") + \"\\n\\nGenerate the visual prompt JSON now.\") }}\n    }\n  ],\n  \"temperature\": 0.6,\n  \"response_format\": {\n    \"type\": \"json_object\"\n  }\n}",
+        "options": {}
+      },
+      "id": "ce8f669d-4189-42cd-aadb-a1b0ed3682f6",
+      "name": "Generate Image Prompt",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -3840,
+        0
+      ],
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "XNt3267XjKHTIv7V",
+          "name": "Groq Vinay"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const llm = $input.first().json;\nlet state;\nif ($runIndex === 0) {\n  state = { ...$('Normalize Image Input').first().json };\n  state.image_retries_left = 3;\n} else {\n  const prevUpdates = $('Update Image Prompt State').all();\n  state = { ...prevUpdates[prevUpdates.length - 1].json };\n}\n\nlet parsed = {};\ntry {\n  let content = llm.choices?.[0]?.message?.content || '{}';\n  content = content.replace(/```json|```/g, '').trim();\n  parsed = JSON.parse(content);\n} catch (e) { parsed = {}; }\n\nif (parsed.image_prompt_current) state.image_prompt_current = parsed.image_prompt_current;\nstate.image_approved = false;\nstate.image_critique = \"\";\n\nreturn [{ json: state }];"
+      },
+      "id": "71846601-dff0-449e-ae6c-7b475e62b9d3",
+      "name": "Merge Image Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3680,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"llama-3.3-70b-versatile\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are an expert Image Prompt Critic specializing in high-end generative AI (Flux, Midjourney, DALL-E 3).\\n\\n==============================\\n📋 EVALUATION CRITERIA\\n==============================\\n1. VISUAL CLARITY: Is the subject well-defined, or is the prompt cluttered and contradictory?\\n2. CINEMATIC QUALITY: Does it specify lighting (e.g., rim lighting, softbox), camera angles, and lens types (e.g., 85mm f/1.8)?\\n3. BRAND ALIGNMENT: Does the prompt reflect the topic and mood provided by the user?\\n4. FLUX OPTIMIZATION: Does it avoid generic buzzwords like 'photorealistic' in favor of descriptive textures and details?\\n\\n==============================\\n📦 OUTPUT FORMAT (STRICT JSON)\\n==============================\\nReturn ONLY a JSON object. Do not provide any text outside the JSON structure.\\n\\n{\\n  \\\"approved\\\": boolean,\\n  \\\"critique\\\": \\\"Provide a concise, expert critique. If approved: false, explain exactly what is missing (e.g., 'Missing focal length' or 'Inconsistent lighting').\\\"\\n}\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": {{ JSON.stringify(\"==============================\\n📌 SUBMISSION\\n==============================\\nTopic: \" + $json.topic + \"\\n\\nIMAGE PROMPT TO EVALUATE:\\n\" + (typeof $json.image_prompt_current === 'object' ? JSON.stringify($json.image_prompt_current) : $json.image_prompt_current)) }}\n    }\n  ],\n  \"temperature\": 0.3,\n  \"response_format\": {\n    \"type\": \"json_object\"\n  }\n}",
+        "options": {}
+      },
+      "id": "b905a981-adfa-420d-8110-32fbc23266f2",
+      "name": "Image Prompt Critic",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -3536,
+        0
+      ],
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "XNt3267XjKHTIv7V",
+          "name": "Groq Vinay"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "id-1",
+              "leftValue": "={{ $json.image_approved }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "false"
+              }
+            },
+            {
+              "id": "id-2",
+              "leftValue": "={{ $json.image_retries_left }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "080925f2-19a7-400e-be15-92f705d3b5cd",
+      "name": "Check Image Prompt Retry",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -3376,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Accept",
+              "value": "image/png"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  {\n    \"inputs\": `You are creating a professional social media marketing image.\\n\\nContext:\\n\"${$json.context || \"\"}\"\\n\\nPosts Context:\\nLinkedIn: ${$json.linkedin_post || \"\"}\\nFacebook: ${$json.facebook_post || \"\"}\\n\\nVisual Direction:\\nSubject: ${$json.image_prompt_current?.subject || \"\"}\\nEnvironment: ${$json.image_prompt_current?.environment || \"\"}\\nLighting: ${$json.image_prompt_current?.lighting || \"\"}\\nStyle: ${$json.image_prompt_current?.style || \"\"}\\n\\nBrand Style: ${$json.brand?.brand_style || \"\"}\\nBrand Colors: ${$json.brand?.brand_colors ? $json.brand.brand_colors.join(\", \") : \"\"}\\n\\nSTRICT RULES: No text, no logos.`\n  }\n}}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "b9b16901-2899-48d4-9a66-b39e3edbe889",
+      "name": "Generate Image",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -3888,
+        -352
+      ],
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "8Jx7ZZaa1VqQuVJM",
+          "name": "HF API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = { ...$input.first().json };\nstate.reference_analysis = \"\";\nreturn [{ json: state }];"
+      },
+      "id": "e26d0f7d-2708-4a7e-a5e7-0ef07de85b98",
+      "name": "Skip Reference Analysis",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -4224,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = { ...$input.first().json };\nstate.reference_analysis = \"\";\nreturn [{ json: state }];"
+      },
+      "id": "ebea38d0-11f8-47cc-97b3-13fe24e2c71a",
+      "name": "Clear Reference Analysis",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -4400,
+        -176
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = $('Initialize State').first().json;\nconst brandData = $input.first().json;\n\nconst defaultBrand = {\n  brand_name: \"\", brand_colors: [], brand_style: \"\", brand_text: \"\", logo_url: \"\", logo_position: \"top-right\"\n};\n\nconst brand = brandData && Object.keys(brandData).length > 0\n  ? {\n      brand_name: brandData.brand_name || \"\",\n      brand_colors: Array.isArray(brandData.brand_colors) ? brandData.brand_colors : [],\n      brand_style: brandData.brand_style || \"\",\n      brand_text: brandData.brand_text || \"\",\n      logo_url: brandData.logo_url || \"\",\n      logo_position: brandData.logo_position || \"top-right\"\n    }\n  : defaultBrand;\n\nstate.brand = brand;\nreturn [{ json: state }];"
+      },
+      "id": "799a061d-9a1e-48a4-8c69-fc32c529b20c",
+      "name": "Set Brand Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -4240,
+        -752
+      ]
+    },
+    {
+      "parameters": {
+        "collection": "brands",
+        "options": {},
+        "query": "={\n  \"userId\": \"{{$json.userId}}\",\n  \"brand_name\": \"{{$json.brand_name}}\"\n}"
+      },
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.2,
+      "position": [
+        -4400,
+        -752
+      ],
+      "id": "6b66d8a2-d489-438a-accb-07abcc6b8a9d",
+      "name": "Get Brand Context",
+      "credentials": {
+        "mongoDb": {
+          "id": "PZYfSrv8pvK6tdWn",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const referenceImageUrl = $input.first().json.reference_image_url || '';\nconst payload = {\n  model: \"meta-llama/llama-4-scout-17b-16e-instruct\",\n  messages: [\n    {\n      role: \"system\",\n      content: `Extract structured insights to generate a NEW image with same style. Return ONLY JSON.`\n    },\n    {\n      role: \"user\",\n      content: [\n        { type: \"text\", text: `Analyze this image...` },\n        { type: \"image_url\", image_url: { url: referenceImageUrl } }\n      ]\n    }\n  ],\n  temperature: 0.2,\n  response_format: { type: \"json_object\" }\n};\n\nreturn [{ json: { ...$input.first().json, groq_body: payload } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -4400,
+        48
+      ],
+      "id": "b768845e-bcab-4650-a422-92928cc88fc9",
+      "name": "Prepare Payload"
+    },
+    {
+      "parameters": {
+        "jsCode": "const baseState = $(\"Reset Image State\").first().json;\nconst incomingItems = $input.all();\nlet state = { ...baseState };\n\nfor (const item of incomingItems) {\n  const data = item.json || {};\n  if (data.reference_analysis && typeof data.reference_analysis === 'object') state.reference_analysis = data.reference_analysis;\n  if (data.image_prompt_current) state.image_prompt_current = data.image_prompt_current;\n  if (data.image_url) state.image_url = data.image_url;\n}\n\nstate.brand = state.brand || {};\nstate.brand.brand_colors = Array.isArray(state.brand.brand_colors) ? state.brand.brand_colors : [];\n\nconst fieldsToEnsure = [\n  'topic', 'tone', 'context', 'post_details', \n  'linkedin_post', 'facebook_post', 'instagram_post', 'reddit_post', 'twitter_post',\n  'image_prompt_current', 'image_url', 'reference_image_url'\n];\n\nfieldsToEnsure.forEach(field => { state[field] = state[field] || \"\"; });\n\nreturn [{ json: state }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -4032,
+        -288
+      ],
+      "id": "9858167b-4b21-4d89-b3cb-77964d7fd2b3",
+      "name": "Normalize Image Input"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "id-1",
+              "leftValue": "={{ $json.reference_image_url }}",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "dabe58b7-12c1-462e-8d6c-0562a3df371e",
+      "name": "Check Reference URL Empty",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -4560,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.brand.logo_url }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "logo"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -3696,
+        -352
+      ],
+      "id": "dfc01fcf-6a0f-4915-98dd-5449c8c5291d",
+      "name": "Logo Download",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "composite",
+        "dataPropertyNameComposite": "logo",
+        "positionX": "={{ $node[\"Logo Download\"].json.brand.logo_position.includes('right') ? ($json.size.width - 150) : 20 }}",
+        "positionY": "={{ $node[\"Logo Download\"].json.brand.logo_position.includes('bottom') ? ($json.size.height - 150) : 20 }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.editImage",
+      "typeVersion": 1,
+      "position": [
+        -3504,
+        -352
+      ],
+      "id": "0e77843b-7b65-4768-a845-334f3b83b6ba",
+      "name": "Edit Image"
+    },
+    {
+      "parameters": {
+        "operation": "information"
+      },
+      "type": "n8n-nodes-base.editImage",
+      "typeVersion": 1,
+      "position": [
+        -3600,
+        -224
+      ],
+      "id": "9b65dd91-1dd2-477b-8b81-ceee85d837e6",
+      "name": "Get Information"
+    },
+    {
+      "parameters": {
+        "operation": "uploadFile",
+        "additionalFieldsFile": {}
+      },
+      "type": "n8n-nodes-cloudinary.cloudinary",
+      "typeVersion": 1,
+      "position": [
+        -3376,
+        -256
+      ],
+      "id": "ccbcc268-9959-4b1c-ad03-480d4dfda1c2",
+      "name": "Upload Image",
+      "credentials": {
+        "cloudinaryApi": {
+          "id": "N6aKOTjlbMkYKwqA",
+          "name": "Cloudinary account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "bb08fcc1-67fb-456d-9ee7-e09b5e0056bf",
+              "leftValue": "={{ $json.brand.logo_url }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -3792,
+        -208
+      ],
+      "id": "78c524b0-aac4-4b64-b7a3-45b30aa21938",
+      "name": "Logo Exists"
+    },
+    {
+      "parameters": {
+        "jsCode": "let state;\ntry { state = { ...$('Update Image Prompt State').last().json }; }\ncatch (e) { try { state = { ...$('Update Text State').last().json }; } catch (e2) { state = { ...$('Set Brand Context').first().json }; } }\n\nconst upload = $input.first().json || {};\nconst imageUrl = upload.secure_url || upload.url || state.image_url || \"\";\n\nconst platforms = state.platforms || [];\nconst content = {};\n\n// Safe extraction ONLY if platform is requested\nif (platforms.includes('linkedin')) content.linkedin = state.linkedin_post || \"\";\nif (platforms.includes('facebook')) content.facebook = state.facebook_post || \"\";\nif (platforms.includes('instagram')) content.instagram = state.instagram_post || \"\";\nif (platforms.includes('reddit')) content.reddit = state.reddit_post || \"\";\nif (platforms.includes('twitter')) content.twitter = state.twitter_post || \"\";\n\nconst finalOutput = {\n  user_id: state.userId || \"\",\n  image_url: imageUrl,\n  content: content,\n  title: {\n    default: state.title_default || \"\",\n    reddit: state.title_reddit || \"\"\n  },\n  tags: Array.isArray(state.tags) ? state.tags : [],\n  platforms: platforms,\n  scheduled_time: state.scheduled_time || null\n};\n\nreturn [{ json: finalOutput }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3840,
+        -656
+      ],
+      "id": "8c14db23-5415-43d8-8c6a-5bad20a6fcc3",
+      "name": "Format Final"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Initialize State').item.json.userEmail }}",
+        "subject": "🚀 Your Content is Ready!",
+        "message": "=<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n<style>\n  body { \n    background: #f4f7fb; \n    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; \n    margin: 0; \n    padding: 20px; \n    color: #333;\n  }\n  .container { \n    max-width: 640px; \n    margin: auto; \n    background: #ffffff; \n    border-radius: 12px; \n    overflow: hidden;\n    box-shadow: 0 4px 15px rgba(0,0,0,0.05);\n  }\n  .header {\n    background: linear-gradient(135deg, #2563EB, #4F46E5);\n    color: #ffffff;\n    padding: 24px;\n    text-align: center;\n  }\n  .header h2 {\n    margin: 0;\n    font-size: 24px;\n    font-weight: 600;\n    letter-spacing: -0.5px;\n  }\n  .content-body {\n    padding: 24px;\n  }\n  .image-container {\n    margin-bottom: 24px;\n    text-align: center;\n  }\n  .image-container img {\n    max-width: 100%;\n    height: auto;\n    border-radius: 8px;\n    box-shadow: 0 2px 8px rgba(0,0,0,0.1);\n  }\n  .section { \n    margin-bottom: 20px; \n    padding: 16px; \n    background: #f8fafc; \n    border: 1px solid #e2e8f0;\n    border-radius: 8px; \n    line-height: 1.6;\n  }\n  .section.highlight {\n    background: #eff6ff;\n    border-color: #bfdbfe;\n  }\n  .title { \n    font-weight: 600; \n    font-size: 15px;\n    margin-bottom: 8px; \n    color: #1e293b;\n    display: flex;\n    align-items: center;\n    gap: 6px;\n  }\n  .content-text {\n    font-size: 14px;\n    color: #475569;\n    white-space: pre-wrap; /* Preserves line breaks in social posts */\n  }\n  .tags-container {\n    margin-top: 12px;\n  }\n  .tag {\n    display: inline-block;\n    background: #e2e8f0;\n    color: #475569;\n    padding: 4px 10px;\n    border-radius: 16px;\n    font-size: 12px;\n    font-weight: 500;\n    margin: 0 4px 4px 0;\n  }\n  \n  /* --- NEW BUTTON STYLES --- */\n  .cta-container {\n    text-align: center;\n    margin-top: 32px;\n    margin-bottom: 12px;\n  }\n  .cta-button {\n    display: inline-block;\n    background: linear-gradient(135deg, #2563EB, #4F46E5);\n    color: #ffffff;\n    text-decoration: none;\n    padding: 14px 28px;\n    border-radius: 8px;\n    font-weight: 600;\n    font-size: 15px;\n    box-shadow: 0 4px 10px rgba(37, 99, 235, 0.2);\n  }\n</style>\n</head>\n<body>\n<div class=\"container\">\n  <div class=\"header\">\n    <h2>🚀 Your AI Content is Ready!</h2>\n  </div>\n  \n  <div class=\"content-body\">\n    \n    {{\n      $json.image_url && $json.image_url.trim() !== \"\" ? `\n      <div class=\"image-container\">\n        <img src=\"${$json.image_url}\" alt=\"Generated Social Media Visual\" />\n      </div>\n      ` : ''\n    }}\n\n    {{\n      $json.title && $json.title.default ? `\n      <div class=\"section highlight\">\n        <div class=\"title\">📌 Suggested Title</div>\n        <div class=\"content-text\">${$json.title.default}</div>\n      </div>\n      ` : ''\n    }}\n\n    {{\n      $json.content.facebook ? `\n      <div class=\"section\">\n        <div class=\"title\">📘 Facebook</div>\n        <div class=\"content-text\">${$json.content.facebook}</div>\n      </div>\n      ` : ''\n    }}\n\n    {{\n      $json.content.linkedin ? `\n      <div class=\"section\">\n        <div class=\"title\">💼 LinkedIn</div>\n        <div class=\"content-text\">${$json.content.linkedin}</div>\n      </div>\n      ` : ''\n    }}\n\n    {{\n      $json.content.twitter ? `\n      <div class=\"section\">\n        <div class=\"title\">🐦 Twitter</div>\n        <div class=\"content-text\">${$json.content.twitter}</div>\n      </div>\n      ` : ''\n    }}\n\n    {{\n      $json.content.instagram ? `\n      <div class=\"section\">\n        <div class=\"title\">📸 Instagram</div>\n        <div class=\"content-text\">${$json.content.instagram}</div>\n      </div>\n      ` : ''\n    }}\n\n    {{\n      $json.content.reddit ? `\n      <div class=\"section\">\n        <div class=\"title\">💬 Reddit</div>\n        <div class=\"content-text\">${$json.content.reddit}</div>\n      </div>\n      ` : ''\n    }}\n\n    {{\n      $json.tags && $json.tags.length > 0 ? `\n      <div class=\"section\">\n        <div class=\"title\">🏷️ Hashtags</div>\n        <div class=\"tags-container\">\n          ${$json.tags.map(tag => `<span class=\"tag\">#${tag}</span>`).join('')}\n        </div>\n      </div>\n      ` : ''\n    }}\n\n    <div class=\"cta-container\">\n      <a href=\"https://your-app-url.com/dashboard\" class=\"cta-button\">View Post on App</a>\n    </div>\n\n  </div>\n</div>\n</body>\n</html>",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -3520,
+        -656
+      ],
+      "id": "788ccded-d0bf-46f1-85bc-059c63cfcbaa",
+      "name": "Send a message",
+      "webhookId": "dea32dfe-fb30-49cb-8132-fa4a50646dd7",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "8E2RqpsGhsTSCCG2",
+          "name": "Loomin"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $('Format Final').first().json }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -3664,
+        -656
+      ],
+      "id": "a25ae053-21f6-4fb9-9e3e-fc91975ce2aa",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "content": "# Initial Data\n",
+        "height": 224,
+        "width": 672,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -4768,
+        -816
+      ],
+      "typeVersion": 1,
+      "id": "6b795136-1496-4c56-aa39-dad8324e57d9",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "# Final Data",
+        "height": 208,
+        "width": 544,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -3888,
+        -720
+      ],
+      "typeVersion": 1,
+      "id": "374d7957-a44a-4d0b-b1ab-6e442fe4d3f0",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "# Image Analysis Handling",
+        "height": 496,
+        "width": 848,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -4768,
+        -320
+      ],
+      "typeVersion": 1,
+      "id": "7f8662f3-3c4a-4d7f-b68d-3544d84df852",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "# Post Generation\n",
+        "height": 240,
+        "width": 832,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -4768,
+        -576
+      ],
+      "id": "0e51e4ce-4ca8-4bf7-b95d-bf1ef9663648",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "# Image Prompt Generation\n",
+        "height": 240,
+        "width": 688,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -3904,
+        -64
+      ],
+      "id": "90968e52-2147-4034-84aa-fc68fe91b18c",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "# Image Generation + Logo Handling\n",
+        "height": 336,
+        "width": 688,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -3904,
+        -416
+      ],
+      "id": "1b8d5d9d-dcba-4655-a0ac-2a23d1222b74",
+      "name": "Sticky Note5"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Merge Posts Into State": {
+      "main": [
+        [
+          {
+            "node": "Text Critic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Input": {
+      "main": [
+        [
+          {
+            "node": "Initialize State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Initialize State": {
+      "main": [
+        [
+          {
+            "node": "Get Brand Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Posts": {
+      "main": [
+        [
+          {
+            "node": "Merge Posts Into State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Text Critic": {
+      "main": [
+        [
+          {
+            "node": "Update Text State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Text State": {
+      "main": [
+        [
+          {
+            "node": "Check Text Retry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Text Retry": {
+      "main": [
+        [
+          {
+            "node": "Generate Posts",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reset Image State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reset Image State": {
+      "main": [
+        [
+          {
+            "node": "Image Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Image Router": {
+      "main": [
+        [
+          {
+            "node": "Format Final",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Assign Existing Image",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Clear Reference Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Check Reference URL Empty",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Reference Image": {
+      "main": [
+        [
+          {
+            "node": "Merge Reference Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Reference Analysis": {
+      "main": [
+        [
+          {
+            "node": "Normalize Image Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Image Prompt": {
+      "main": [
+        [
+          {
+            "node": "Merge Image Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Image Prompt": {
+      "main": [
+        [
+          {
+            "node": "Image Prompt Critic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Image Prompt Critic": {
+      "main": [
+        [
+          {
+            "node": "Check Image Prompt Retry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Image Prompt Retry": {
+      "main": [
+        [
+          {
+            "node": "Generate Image Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Generate Image",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Check Image Prompt Retry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Image": {
+      "main": [
+        [
+          {
+            "node": "Logo Exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assign Existing Image": {
+      "main": [
+        [
+          {
+            "node": "Format Final",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skip Reference Analysis": {
+      "main": [
+        [
+          {
+            "node": "Normalize Image Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clear Reference Analysis": {
+      "main": [
+        [
+          {
+            "node": "Normalize Image Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Brand Context": {
+      "main": [
+        [
+          {
+            "node": "Generate Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Brand Context": {
+      "main": [
+        [
+          {
+            "node": "Set Brand Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Payload": {
+      "main": [
+        [
+          {
+            "node": "Analyze Reference Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Image Input": {
+      "main": [
+        [
+          {
+            "node": "Generate Image Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Reference URL Empty": {
+      "main": [
+        [
+          {
+            "node": "Skip Reference Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Logo Download": {
+      "main": [
+        [
+          {
+            "node": "Get Information",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Information": {
+      "main": [
+        [
+          {
+            "node": "Edit Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Image": {
+      "main": [
+        [
+          {
+            "node": "Upload Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Logo Exists": {
+      "main": [
+        [
+          {
+            "node": "Logo Download",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Upload Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload Image": {
+      "main": [
+        [
+          {
+            "node": "Format Final",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Final": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond to Webhook": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "55f364a4-dc43-4d42-82e5-15b0e8d769da",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "18f1c33671181474aeabe1c3028d92e4ae1f82d05bd9579f1a56e4a3608c6386"
+  },
+  "id": "XWDtJcDuYizuCEiw",
+  "tags": []
+}

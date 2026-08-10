@@ -1,4 +1,4 @@
-﻿import { Sparkles, Play } from "lucide-react";
+import { Sparkles, Play } from "lucide-react";
 import Link from "next/link";
 
 export default function Hero() {
@@ -33,12 +33,17 @@ export default function Hero() {
             Deploy Your Agent
           </Link>
           
-          <button className="flex items-center gap-2 text-sm font-bold text-white hover:text-sky-400 transition-colors group">
+          <a
+            href="https://youtu.be/vRJErqXOZK8"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 text-sm font-bold text-white hover:text-sky-400 transition-colors group"
+          >
             <div className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 transition-colors group-hover:border-sky-500/50">
               <Play size={14} fill="currentColor" className="ml-0.5" />
             </div>
             Watch Demo
-          </button>
+          </a>
         </div>
       </div>
     </section>

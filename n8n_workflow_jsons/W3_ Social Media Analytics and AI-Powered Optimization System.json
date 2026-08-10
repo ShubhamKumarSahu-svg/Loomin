@@ -1,0 +1,1241 @@
+{
+  "name": "W3: Social Media Analytics and AI-Powered Optimization System",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {}
+          ]
+        }
+      },
+      "id": "b4510585-b0ff-400a-99dd-74ee051e1ada",
+      "name": "Hourly Analytics Check",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        592,
+        3104
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "id-1",
+              "leftValue": "={{ $json.platform_posts && ($json.platform_posts.linkedin || $json.platform_posts.instagram || $json.platform_posts.facebook )}}",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "02bccacb-3a27-4900-a028-5dc387f962b9",
+      "name": "Has Platform Posts",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        928,
+        3104
+      ]
+    },
+    {
+      "parameters": {
+        "options": {
+          "reset": false
+        }
+      },
+      "id": "c2619655-6554-4919-8662-34ff4de3da5a",
+      "name": "Process Posts Sequentially",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1120,
+        3088
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.map(item => ({\n  json: {\n    post_id: item.json._id,\n    user_id: item.json.user_id,\n    content: item.json.content,\n    tracking: item.json.tracking,\n    platform_posts: item.json.platform_posts,\n  }\n}));"
+      },
+      "id": "436ca7ea-144f-4c6a-af95-61328a75729c",
+      "name": "Map Post Fields",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        3088
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "id-1",
+              "leftValue": "={{$json.accounts.linkedin.urn &&  $json.accounts.linkedin!== null}}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "8f8176b6-a080-4f4f-9481-1600d21cfe69",
+      "name": "Check LinkedIn ID",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        592,
+        2576
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "id-1",
+              "leftValue": "={{$json.accounts.instagram.ig_user_id && $json.accounts.instagram !== null}}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "6b1d7b5c-d66a-4013-9a17-40964b32583d",
+      "name": "Check Instagram ID",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        816,
+        2816
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://graph.facebook.com/v25.0/{{ $('Everything_what_to_proceed').item.json.platform_posts.instagram }}\n?fields=id,caption,media_type,insights.metric(reach,likes,comments,saved,shares)\n&access_token={{ $('Everything_what_to_proceed').item.json.accounts.instagram.access_token }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "94b5daae-1062-46cc-a904-c3787ca8b522",
+      "name": "Fetch Instagram Analytics",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        976,
+        2800
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.map(item => ({\n  json: {\n    linkedin: {\n      images: item.json?.images || [],\n      timeSincePosted: item.json?.timeSincePosted || null,\n      text: item.json?.text || \"\",\n      comments: item.json?.comments || [],\n      attributes: item.json?.attributes || {},\n      reactions: item.json?.reactions || {},\n      numShares: item.json?.numShares || 0,\n      numLikes: item.json?.numLikes || 0,\n      numComments: item.json?.numComments || 0\n    }\n  }\n}));"
+      },
+      "id": "1ee5b22e-eed1-4286-9ee4-01eacead3963",
+      "name": "Normalize LinkedIn Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        2528
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get raw response from Instagram HTTP node\nconst responseData = $input.first().json;\nconsole.log(responseData);\n\n// Correct path to insights data\nconst insightsArray = responseData?.insights?.data;\n\n// Ensure response exists and has insights array\nif (insightsArray && Array.isArray(insightsArray)) {\n\n    const insights = {};\n\n    // Loop through each metric object\n    insightsArray.forEach(item => {\n\n        insights[item.name] = {\n            value: item.values?.[0]?.value ?? 0,\n            period: item.period || null,\n            title: item.title || null,\n            description: item.description || null,\n            id: item.id || null\n        };\n\n    });\n\n    // Return normalized structure\n    return {\n        instagram: {\n            success: true,\n            caption: responseData.caption || null,\n            post_id: responseData.id || null,\n            media_type: responseData.media_type || null,\n            insights: insights\n        }\n    };\n\n} else {\n\n    // Handle missing or error responses\n    return {\n        instagram: {\n            success: false,\n            error: \"No insights found. Check Media ID or post age.\",\n            raw_error: responseData?.error || null\n        }\n    };\n\n}"
+      },
+      "id": "c9d52979-97b6-42e5-b963-5f9e44ad0471",
+      "name": "Normalize Instagram Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1264,
+        2800
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the existing data from the loop/node\nconst previousNode = $('Process Posts Sequentially').first().json;\nconst oldAnalytics = previousNode.analytics || {};\n\n// Initialize history\nconst history = oldAnalytics.history || [];\n\n// Merge ALL incoming items (IMPORTANT FIX)\nlet merged = {};\nfor (const item of items) {\n  merged = {\n    ...merged,\n    ...item.json\n  };\n}\n\n// Create new history entry\nconst newEntry = {\n  timestamp: new Date().toISOString(),\n  linkedin: merged.linkedin || null,\n  instagram: merged.instagram || null,\n  facebook: merged.facebook || null\n};\n\n// Only push if data exists\nconst hasData =\n  newEntry.linkedin ||\n  newEntry.instagram ||\n  newEntry.facebook;\n\nif (hasData) {\n  history.push(newEntry);\n}\n\n// Updated analytics object\nconst analytics = {\n  linkedin: newEntry.linkedin,\n  instagram: newEntry.instagram,\n  facebook: newEntry.facebook,\n  last_checked: newEntry.timestamp,\n  history: history\n};\n\nreturn [\n  {\n    json: {\n      ...previousNode,\n      analytics: analytics\n    }\n  }\n];"
+      },
+      "id": "e24d65aa-fc04-41ee-8451-5b07014d2047",
+      "name": "Create Analytics Snapshot",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        592,
+        2256
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    linkedin: null\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        2592
+      ],
+      "id": "4cab748b-056c-4d36-8ad6-ad099c480907",
+      "name": "LinkedIn Default Node"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    instagram: null\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        2848
+      ],
+      "id": "cf344d1a-d189-44ba-8883-cfe40a74b11d",
+      "name": "Instagram Default Node"
+    },
+    {
+      "parameters": {
+        "collection": "social_accounts",
+        "options": {},
+        "query": "={ \"user_id\": \"{{ $json.user_id.toString() }}\" }"
+      },
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.2,
+      "position": [
+        1504,
+        3120
+      ],
+      "id": "e7ea7a2d-2aaa-44a2-990c-d2a13257fc0b",
+      "name": "Fetch Social Accounts",
+      "credentials": {
+        "mongoDb": {
+          "id": "PZYfSrv8pvK6tdWn",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const accounts = items.map(item => item.json);\n\nconst result = {\n  linkedin: null,\n  instagram: null,\n  facebook: null\n};\n\nfor (const acc of accounts) {\n\n  if (acc.platform === \"linkedin\") {\n    result.linkedin = {\n      access_token: acc.access_token,\n      refresh_token: acc.refresh_token || null,\n      urn: acc.meta?.linkedin_urn || null\n    };\n  }\n\n  if (acc.platform === \"instagram\") {\n    result.instagram = {\n      access_token: acc.access_token,\n      refresh_token: acc.refresh_token || null,\n      ig_user_id: acc.meta?.ig_user_id || null\n    };\n  }\n\n  if (acc.platform === \"facebook\") {\n    result.facebook = {\n      access_token: acc.access_token,\n      refresh_token: acc.refresh_token || null,\n      facebook_id: acc.meta?.facebook_id || null\n    };\n  }\n\n}\n\nreturn [{\n  json: {\n    accounts: result\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1664,
+        3104
+      ],
+      "id": "93877bef-6b73-4dc6-a65f-9908403b2d45",
+      "name": "Tranform Accounts"
+    },
+    {
+      "parameters": {
+        "numberInputs": 3
+      },
+      "id": "283dc234-6068-4b96-bfbf-3af761f2a816",
+      "name": "Merge Platform Data",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1360,
+        2544
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "Run actor and get dataset",
+        "actorSource": "store",
+        "actorId": {
+          "__rl": true,
+          "value": "=supreme_coder~linkedin-post",
+          "mode": "id"
+        },
+        "customBody": "={ \"urls\": [ \"https://www.linkedin.com/feed/update/{{$json.platform_posts.linkedin}}/\" ], \"limitPerSource\": 10, \"deepScrape\": true, \"rawData\": false }",
+        "timeout": {},
+        "memory": 512
+      },
+      "type": "@apify/n8n-nodes-apify.apify",
+      "typeVersion": 1,
+      "position": [
+        784,
+        2528
+      ],
+      "id": "05ec9ce0-c308-42cf-a21e-91b9fccdf5ea",
+      "name": "Scrap LinkedIn Post"
+    },
+    {
+      "parameters": {
+        "jsCode": "console.log('input0 length =', $input.all(0).length);\nconsole.log('input1 length =', $input.all(1).length);\n\n// Get ALL inputs safely\nconst input0 = $input.all(1);\nconst input1 = $input.all(0);\n\n// find post data (single item)\nconst postData = input1[0].json;\n\n// accounts list\nconst accounts = input0.map(i => i.json);\n\n// clone post\nconst result = JSON.parse(JSON.stringify(postData));\n\n// fill data\nfor (const acc of accounts) {\n\n  if (acc.platform === \"linkedin\") {\n    result.tokens.linkedin = {\n      access_token: acc.access_token || null,\n      refresh_token: acc.refresh_token || null,\n    };\n    result.linkedin_id = acc.meta?.linkedin_urn || null;\n  }\n\n  if (acc.platform === \"instagram\") {\n    result.tokens.instagram = {\n      access_token: acc.access_token || null,\n      refresh_token: acc.refresh_token || null,\n    };\n    result.instagram_id = acc.meta?.ig_user_id || null;\n  }\n\n  if (acc.platform === \"facebook\") {\n    result.tokens.facebook = {\n      access_token: acc.access_token || null,\n      refresh_token: acc.refresh_token || null,\n    };\n    result.reddit_id = acc.meta?.facebook_id || null;\n  }\n}\n\nreturn [{ json: result }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        592,
+        2800
+      ],
+      "id": "93a8eb83-453a-4c8b-8d57-421bcf96c03c",
+      "name": "Everything_what_to_proceed"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1856,
+        3104
+      ],
+      "id": "844727a1-b816-4a85-815e-3be6c7895529",
+      "name": "Merge-overall-per-post"
+    },
+    {
+      "parameters": {
+        "operation": "findOneAndUpdate",
+        "collection": "posts",
+        "updateKey": "old_id",
+        "fields": "analytics",
+        "options": {
+          "useDotNotation": true
+        }
+      },
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.2,
+      "position": [
+        864,
+        2256
+      ],
+      "id": "b54319cf-a0c6-41d9-af70-b1f24f9b4e73",
+      "name": "Find and update documents",
+      "alwaysOutputData": true,
+      "credentials": {
+        "mongoDb": {
+          "id": "PZYfSrv8pvK6tdWn",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1e8643a5-6227-429b-85f8-3841d482e168",
+              "name": "analytics",
+              "value": "={{\n{\n  last_checked: $('Create Analytics Snapshot').item.json.analytics.last_checked,\n\n  history: [\n    ...($json.analytics?.history),\n  ]\n}\n}}",
+              "type": "object"
+            },
+            {
+              "id": "8ed405b5-7060-423a-a0f1-33e32cfdde70",
+              "name": "old_id",
+              "value": "={{ $('Process Posts Sequentially').item.json.old_id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        736,
+        2256
+      ],
+      "id": "0054de6a-cfbf-4777-ab3f-7cc4b5bb0b54",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Return ONE JSON OBJECT only.\nDo NOT wrap output in [].\nNever return an array.\n\nThe structured output schema is authoritative.\nIf a field expects an object, NEVER return a string.\nDo not rename keys.\n\nCRITICAL OUTPUT RULES:\n\nReturn ONLY one JSON object. - NO Markdown Formatting: Do not use ```json blocks. Start with { and end with }.\n\nNO Conversational Text: No \"Here is the data,\" no explanations, no \"Note:\".\n\nSCHEMA IS A HARD BOUNDARY: Do not add any keys or properties that are not in the schema provided below. If you add extra keys, the system will crash.\n\nZERO Hallucination: If data for a platform (e.g., facebook) is null or missing in the input, you MUST return 0 for numbers and \"insufficient_data\" for text. NEVER guess.\n\nINPUT DATA:\n\nHistory Snapshots: {{ $json.analytics.history }}\n\nLinkedIn Content: {{ $json.content.linkedin }}\n\nInstagram Content: {{ $json.content.instagram }}\n\nfacebook Content: {{ $json.content.facebook }}\n\nCOMPUTATION LOGIC:\n\nTrends: Compare ONLY the latest snapshot vs. the previous one. Values: \"increasing\", \"decreasing\", \"stable\", \"insufficient_data\".\n\nGraph Data: Must be derived ONLY from analytics.history. Arrays must be equal length. Use null for missing metrics at specific positions.\n\nScores (0-100): Calculate based only on the latest snapshot. If metrics are missing, score is 0.\n\nSummary: best_platform is the highest score. If all scores are 0, best_platform MUST be null.\n\nHashtags: Array of strings. Lowercase. No spaces. No # symbol. Use fallback list if input is low.\n\n==============================\nSTRICT DATA RULES (VERY IMPORTANT)\n==============================\n\n1. NEVER invent numbers.\n2. ALL numbers MUST come directly from analytics.history.\n3. If data missing -> use null or \"insufficient_data\".\n4. Do NOT estimate reach, engagement, or scores.\n5. If fewer than 2 snapshots -> trends = \"insufficient_data\".\n\n==============================\nGRAPH DATA RULES (FIXED)\n==============================\n\nGraph data MUST be created ONLY from analytics.history.\n\nProcess snapshots in order:\noldest → newest.\n\nFor EACH snapshot:\n\nlinkedin:\n- likes → linkedin_likes[]\n- comments → linkedin_comments[]\n- shares → linkedin_shares[]\n\ninstagram:\n- reach → instagram_reach[]\n- engagement → instagram_engagement[]\n\nfacebook:\n- upvotes → facebook_upvotes[]\n- comments → facebook_comments[]\n\ntimestamps[] must contain snapshot timestamps.\n\nIf a metric does not exist in a snapshot:\ninsert null at that position.\n\nDO NOT:\n- average values\n- predict values\n- generate random values\n\nAll graph arrays MUST have same length.\n\n==============================\nSUMMARY RULES (FIXED)\n==============================\n\nSummary MUST be derived strictly from platform_scores and trends.\n\noverall_performance:\n- all scores < 15 → \"low\"\n- mixed scores 15–40 → \"moderate\"\n- multiple increasing trends → \"good\"\n\nbest_platform:\nplatform with highest score.\n\ngrowth_direction:\nmajority trend across platforms.\n\nconfidence_score:\n- <2 snapshots → 10\n- otherwise increase based on available data consistency.\n\nDO NOT invent metrics like reach totals or fake engagement numbers.\n\n==============================\nCONTENT STRATEGY RULES (FIXED)\n==============================\n\nContent strategy must be based ONLY on real data:\n\nIF engagement low:\n- suggest stronger CTAs\n- suggest question-based captions\n\nIF reach low:\n- suggest hashtags\n- suggest posting consistency\n\nIF comments low:\n- suggest interactive captions\n\nIf insufficient data:\n- give generic but realistic advice.\n- DO NOT invent campaign results.\n\n==============================\nTREND LOGIC\n==============================\n\nCompare ONLY:\nlatest snapshot VS previous snapshot.\n\nif latest > previous -> \"increasing\"\nif latest < previous -> \"decreasing\"\nif equal -> \"stable\"\nif missing -> \"insufficient_data\"\n\nAllowed tokens ONLY:\n\"increasing\"\n\"decreasing\"\n\"stable\"\n\"insufficient_data\"\n\n==============================\nPLATFORM SCORE LOGIC\n==============================\n\nScores range 0–100.\n\n- Zero engagement → 0–10\n- Very low engagement → 5–20\n- Increase score only when multiple metrics increase.\n- Never assign high scores without real evidence.\n\n==============================\nTASK\n==============================\n\n- Compare latest vs previous snapshot.\n- Compute trends.\n- Generate graph_data strictly from history.\n- Generate 6 insights.\n- Generate 6 recommendations.\n- Detect anomalies (>200% jump/drop).\n- Produce prediction, content_strategy, and comment_analysis.\n\n==============================\nPLATFORM SCORE CALCULATION (STRICT)\n==============================\n\nPlatform score MUST be calculated ONLY from metrics available\nin the latest snapshot.\n\nRules:\n- Start from score = 0.\n- Add contribution only if metric exists.\n- likes, upvotes, engagement → +weight based on value\n- comments → small weight\n- shares → medium weight\n- reach → normalize as low influence.\n\nIf ALL metrics missing or zero -> score = 0.\n\nDO NOT:\n- normalize using unknown ranges\n- invent engagement rate\n- estimate missing values\n- use previous knowledge\n\nScore must remain between 0–100.\n\nIf all platform_scores are equal or all 0:\nbest_platform MUST be null.\n\n==============================\nRECOMMENDED HASHTAGS VALIDATION (STRICT)\n==============================\n\nrecommended_hashtags MUST follow ALL rules below:\n\n1. TYPE RULE\n- MUST be an array.\n- NEVER return a string.\n- NEVER return null.\n\n2. SIZE RULE\n- Minimum: 5 hashtags\n- Maximum: 15 hashtags\n\n3. FORMAT RULE\n- Each hashtag MUST be lowercase.\n- ONLY letters and numbers allowed.\n- NO spaces.\n- NO special symbols.\n- DO NOT include \"#\" symbol.\n  Example VALID: \"socialmedia\"\n  Example INVALID: \"#socialmedia\"\n\n4. CONTENT RULES\n- Must be realistic social media hashtags.\n- Must relate to analytics, marketing, content creation, or growth.\n- Do NOT invent random words.\n- Do NOT include platform names with symbols.\n\n5. DUPLICATE RULE\n- No duplicates allowed.\n- If duplicate detected → keep only first occurrence.\n\n6. FALLBACK RULE\nIf insufficient data:\nReturn generic but valid marketing hashtags.\n\nFallback list example:\n[\n \"socialmedia\",\n \"marketing\",\n \"analytics\",\n \"digitalmarketing\",\n \"contentstrategy\",\n \"contentcreation\",\n \"branding\",\n \"engagement\",\n \"growth\",\n \"creator\"\n]\n\n7. OUTPUT SAFETY\n- NEVER output empty array.\n- NEVER output objects inside hashtags array.\n- EVERY item MUST be a string.\n\nReturn ONLY JSON matching the schema.\nReturn ONLY the JSON object. Do not include any conversational text, explanations, or markdown formatting outside of the function call.",
+        "hasOutputParser": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1344,
+        2240
+      ],
+      "id": "11760c28-c8bc-44d5-9935-827b1aed892d",
+      "name": "AI Agent",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "collection": "posts",
+        "options": {},
+        "query": "={\n  \"old_id\": \"{{ $json.old_id }}\"\n}"
+      },
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.2,
+      "position": [
+        1040,
+        2256
+      ],
+      "id": "e5d1358d-163c-4307-8d0d-41dc5a8598c0",
+      "name": "Extract_latest_updated_data_from_db",
+      "credentials": {
+        "mongoDb": {
+          "id": "PZYfSrv8pvK6tdWn",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "llama-3.3-70b-versatile",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        1312,
+        2416
+      ],
+      "id": "802d3c57-9a28-488a-94cc-d4a6bebaaa35",
+      "name": "Groq Chat Model",
+      "credentials": {
+        "groqApi": {
+          "id": "302tUf9gELo6ZuBm",
+          "name": "Groq Vinay"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n\"output\": {\n\"summary\": {\n\"overall_performance\": \"low\",\n\"best_platform\": \"string\",\n\"growth_direction\": \"insufficient_data\",\n\"confidence_score\": 10\n},\n\"platform_scores\": {\n\"linkedin\": 0,\n\"instagram\": 0,\n\"facebook\": 0\n},\n\"trends\": {\n\"linkedin\": {\n\"likes\": \"insufficient_data\",\n\"comments\": \"insufficient_data\",\n\"shares\": \"insufficient_data\"\n},\n\"instagram\": {\n\"reach\": \"insufficient_data\",\n\"engagement\": \"insufficient_data\"\n},\n\"facebook\": {\n\"upvotes\": \"insufficient_data\",\n\"comments\": \"insufficient_data\"\n}\n},\n\"graph_data\": {\n\"timestamps\": [],\n\"linkedin_likes\": [],\n\"linkedin_comments\": [],\n\"linkedin_shares\": [],\n\"instagram_reach\": [],\n\"instagram_engagement\": [],\n\"facebook\": [],\n\"facebook\": []\n},\n\"insights\": [\n\"Insufficient data to detect strong trends.\",\n\"Engagement levels are currently low across platforms.\",\n\"Platform scores remain minimal due to missing or low activity signals.\",\n\"Graph data reflects only raw historical metrics provided.\",\n\"No major anomalies detected from available data.\",\n\"More snapshots are needed for reliable comparative analysis.\"\n],\n\"recommendations\": [\n\"Post consistently to gather more engagement data.\",\n\"Use stronger CTAs to encourage interactions.\",\n\"Use question-based captions to increase comments.\",\n\"Use relevant hashtags to improve discoverability when reach is low.\",\n\"Experiment with content formats across platforms.\",\n\"Track analytics regularly to improve confidence score.\"\n],\n\"anomalies\": [],\n\"prediction\": {\n\"next_period_growth\": \"insufficient_data\",\n\"viral_probability\": 0\n},\n\"content_strategy\": {\n\"image_feedback\": {\n\"strengths\": [],\n\"improvements\": []\n},\n\"caption_feedback\": {\n\"strengths\": [],\n\"improvements\": [\n\"Use clearer CTAs\",\n\"Add question-based captions to drive comments\"\n]\n},\n\"hashtag_strategy\": {\n\"recommended_hashtags\": [\n\"socialmedia\",\n\"marketing\",\n\"analytics\",\n\"digitalmarketing\",\n\"contentstrategy\",\n\"socialmediaanalytics\",\n\"contentcreation\",\n\"branding\",\n\"engagement\",\n\"growth\",\n\"creator\",\n\"audiencegrowth\",\n\"socialtips\",\n\"marketingstrategy\",\n\"visualcontent\"\n],\n\"reason\": \"Based on low engagement and need for discoverability.\"\n},\n\"posting_strategy\": {\n\"best_platform_focus\": \"insufficient_data\",\n\"suggested_content_type\": \"short visual content with CTA\",\n\"posting_frequency_advice\": \"2-3 posts per week\"\n},\n\"one_line_creator_advice\": \"Improve consistency and engagement-driven captions.\"\n},\n\"comment_analysis\": {\n\"overall_sentiment\": \"insufficient_data\",\n\"platform_sentiment\": {\n\"linkedin\": \"insufficient_data\",\n\"instagram\": \"insufficient_data\",\n\"reddit\": \"insufficient_data\"\n},\n\"key_themes\": [],\n\"summary_line\": \"Not enough comment data available.\"\n}\n}\n}",
+        "autoFix": true
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        1440,
+        2416
+      ],
+      "id": "52beafb5-796b-4ad6-a146-4941ab179cdc",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "Analytics Of Your Recent Post ",
+        "message": "=<!DOCTYPE html>\n<html>\n<head>\n    <meta charset=\"UTF-8\">\n    <title>Social Media Performance Report</title>\n</head>\n<body style=\"margin: 0; padding: 0; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f4f7f6; color: #333333;\">\n    <table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" style=\"table-layout: fixed;\">\n        <tr>\n            <td align=\"center\" style=\"padding: 20px 0;\">\n                <table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" width=\"600\" style=\"background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.1);\">\n\n                    <tr>\n                        <td align=\"center\" style=\"background-color: #4A90E2; padding: 30px 20px;\">\n                            <h1 style=\"color: #ffffff; margin: 0; font-size: 24px; text-transform: uppercase; letter-spacing: 2px;\">Social Media Insights</h1>\n                            <p style=\"color: #e0e0e0; margin: 10px 0 0 0;\">Performance: <strong>{{ $('AI Agent').first().json.output.summary.overall_performance }}</strong></p>\n                        </td>\n                    </tr>\n\n                    <tr>\n                        <td style=\"padding: 30px 40px;\">\n                            <h2 style=\"color: #4A90E2; font-size: 18px; border-bottom: 2px solid #f4f7f6; padding-bottom: 10px;\">Executive Summary</h2>\n                            <table width=\"100%\" cellspacing=\"0\" cellpadding=\"0\" style=\"margin-top: 15px;\">\n                                <tr>\n                                    <td style=\"padding: 5px 0;\"><strong>Best Performing Platform:</strong></td>\n                                    <td style=\"padding: 5px 0; color: #4A90E2; font-weight: bold; text-transform: capitalize;\">{{ $('AI Agent').first().json.output.summary.best_platform }}</td>\n                                </tr>\n                                <tr>\n                                    <td style=\"padding: 5px 0;\"><strong>Growth Direction:</strong></td>\n                                    <td style=\"padding: 5px 0; color: #27ae60;\">{{ $('AI Agent').first().json.output.summary.growth_direction }}</td>\n                                </tr>\n                                <tr>\n                                    <td style=\"padding: 5px 0;\"><strong>Confidence Score:</strong></td>\n                                    <td style=\"padding: 5px 0;\">{{ $('AI Agent').first().json.output.summary.confidence_score }}%</td>\n                                </tr>\n                            </table>\n                        </td>\n                    </tr>\n\n                    <tr>\n                        <td style=\"padding: 0 40px 30px 40px;\">\n                            <h2 style=\"color: #4A90E2; font-size: 18px; border-bottom: 2px solid #f4f7f6; padding-bottom: 10px;\">Platform Scores</h2>\n                            <table width=\"100%\" cellspacing=\"0\" cellpadding=\"10\" style=\"text-align: center; margin-top: 10px; background-color: #fafafa; border-radius: 5px;\">\n                                <tr>\n                                    <td style=\"border-right: 1px solid #eeeeee;\">\n                                        <div style=\"font-size: 12px; color: #888;\">INSTAGRAM</div>\n                                        <div style=\"font-size: 20px; font-weight: bold; color: #E1306C;\">{{ $('AI Agent').first().json.output.platform_scores.instagram }}</div>\n                                    </td>\n                                    <td style=\"border-right: 1px solid #eeeeee;\">\n                                        <div style=\"font-size: 12px; color: #888;\">LINKEDIN</div>\n                                        <div style=\"font-size: 20px; font-weight: bold; color: #0077B5;\">{{ $('AI Agent').first().json.output.platform_scores.linkedin }}</div>\n                                    </td>\n                                    <td>\n                                        <div style=\"font-size: 12px; color: #888;\">facebook</div>\n                                        <div style=\"font-size: 20px; font-weight: bold; color: #FF4500;\">{{ $('AI Agent').first().json.output.platform_scores.facebook }}</div>\n                                    </td>\n                                </tr>\n                            </table>\n                        </td>\n                    </tr>\n\n                    <tr>\n                        <td style=\"padding: 0 40px 30px 40px;\">\n                            <div style=\"background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin-bottom: 20px;\">\n                                <strong style=\"color: #856404;\">Anomalies Detected:</strong><br>\n                                <span style=\"font-size: 14px;\">{{ $('AI Agent').first().json.output.anomalies }}</span>\n                            </div>\n                            <div style=\"background-color: #d1ecf1; border-left: 4px solid #17a2b8; padding: 15px;\">\n                                <strong style=\"color: #0c5460;\">Strategic Prediction:</strong><br>\n                                <span style=\"font-size: 14px;\">{{ $('AI Agent').first().json.output.prediction }}</span>\n                            </div>\n                        </td>\n                    </tr>\n\n                    <tr>\n                        <td style=\"padding: 0 40px 30px 40px;\">\n                            <h2 style=\"color: #4A90E2; font-size: 18px; border-bottom: 2px solid #f4f7f6; padding-bottom: 10px;\">Audience Sentiment</h2>\n                            <p style=\"font-size: 15px; font-style: italic; color: #555;\">\"{{ $('AI Agent').first().json.output.comment_analysis }}\"</p>\n                        </td>\n                    </tr>\n\n                    <tr>\n                        <td style=\"padding: 0 40px 30px 40px;\">\n                            <h2 style=\"color: #4A90E2; font-size: 18px; border-bottom: 2px solid #f4f7f6; padding-bottom: 10px;\">Key Insights</h2>\n                            <ul style=\"padding-left: 20px; font-size: 14px; line-height: 1.6;\">\n                                {{\n                                  ($('AI Agent').first().json.output.insights || [])\n                                    .map(i => `<li style=\"margin-bottom: 8px;\">${i}</li>`)\n                                    .join('')\n                                }}\n                            </ul>\n                        </td>\n                    </tr>\n\n                    <tr>\n                        <td style=\"padding: 0 40px 30px 40px;\">\n                            <h2 style=\"color: #4A90E2; font-size: 18px; border-bottom: 2px solid #f4f7f6; padding-bottom: 10px;\">Platform Strategies</h2>\n                            <table width=\"100%\" cellspacing=\"0\" cellpadding=\"0\" style=\"font-size: 14px;\">\n                                <tr><td style=\"padding: 8px 0;\">{{ $('AI Agent').first().json.output.content_strategy }}</td></tr>\n                            </table>\n                        </td>\n                    </tr>\n\n                    <tr>\n                        <td style=\"padding: 0 40px 30px 40px;\">\n                            <h2 style=\"color: #4A90E2; font-size: 18px; border-bottom: 2px solid #f4f7f6; padding-bottom: 10px;\">Recommended Actions</h2>\n                            <table width=\"100%\" cellspacing=\"0\" cellpadding=\"0\">\n                                {{\n                                  ($('AI Agent').first().json.output.recommendations || [])\n                                    .map(r => `<tr>\n                                        <td width=\"30\" valign=\"top\" style=\"padding: 5px 0; color: #27ae60;\">✔</td>\n                                        <td style=\"padding: 5px 0; font-size: 14px;\">${r}</td>\n                                      </tr>`)\n                                    .join('')\n                                }}\n                            </table>\n                        </td>\n                    </tr>\n\n                    <tr>\n                        <td style=\"padding: 0 40px 40px 40px;\">\n                            <h2 style=\"color: #4A90E2; font-size: 18px; border-bottom: 2px solid #f4f7f6; padding-bottom: 10px;\">Trending Hashtags</h2>\n                            <div style=\"margin-top: 10px;\">\n                                {{\n                                  ($('AI Agent').first().json.output.recommended_hashtags || [])\n                                    .map(h => `<span style=\"display: inline-block; background-color: #eeeeee; padding: 5px 10px; border-radius: 20px; font-size: 12px; margin: 3px; color: #666;\">#${h}</span>`)\n                                    .join('')\n                                }}\n                            </div>\n                        </td>\n                    </tr>\n\n                    <tr>\n                        <td align=\"center\" style=\"background-color: #f4f7f6; padding: 20px; font-size: 12px; color: #999999;\">\n                            This is an automated analytics report.<br>\n                            &copy; 2024 Social Media Analytics Engine\n                        </td>\n                    </tr>\n\n                </table>\n            </td>\n        </tr>\n    </table>\n</body>\n</html>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1808,
+        2224
+      ],
+      "id": "94a40d2d-819c-4383-b528-14f2ec0cd7b8",
+      "name": "Send a message",
+      "webhookId": "1fd39314-4193-4c50-b22d-62c987515890",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "8E2RqpsGhsTSCCG2",
+          "name": "Loomin"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "2d0f8c6b-940f-4310-8507-b9c5652cf555",
+              "name": "ai_response",
+              "value": "={{ $('AI Agent').first().json.output }}",
+              "type": "object"
+            },
+            {
+              "id": "8d39283b-e5ed-4304-93ec-4e35ae05e58f",
+              "name": "old_id",
+              "value": "={{ $('Process Posts Sequentially').item.json.old_id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1904,
+        2368
+      ],
+      "id": "9cd1b347-21ac-43d4-abde-a13b69e5ff8d",
+      "name": "edit_ai_reponse",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "operation": "findOneAndUpdate",
+        "collection": "posts",
+        "updateKey": "old_id",
+        "fields": "ai_response",
+        "options": {
+          "dateFields": "",
+          "useDotNotation": true
+        }
+      },
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.2,
+      "position": [
+        1888,
+        2560
+      ],
+      "id": "0c57d854-0378-48a0-825b-357854371c4b",
+      "name": "Find and update documents1",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "credentials": {
+        "mongoDb": {
+          "id": "PZYfSrv8pvK6tdWn",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "id-1",
+              "leftValue": "={{$json.accounts.reddit.subreddit && $json.accounts.reddit !== null}}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ed742d61-13c2-44b5-8f42-d9f78ff15d16",
+      "name": "Check Facebook ID",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1456,
+        2800
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://oauth.reddit.com/api/info?id=t3_{{ $json.platform_posts.facebook }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$json.accounts.reddit.access_token}}"
+            },
+            {
+              "name": "User-Agent",
+              "value": "n8n-bot"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "a046febf-2d25-40b3-aa30-f8982600999f",
+      "name": "Fetch Fcebook Analytics",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1616,
+        2800
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the data from the previous node\nconst responseData = $input.first().json;\n\n// Check if the post actually exists (children array is not empty)\nif (responseData.data && responseData.data.children && responseData.data.children.length > 0) {\n    const post = responseData.data.children[0].data;\n\n    // Return the cleaned up object nested inside a \"reddit\" key\n    return {\n        reddit: {\n            facebook_id: post.facebook_id,\n            title: post.title,\n            author: post.author,\n            score: post.score,\n            upvote_ratio: post.upvote_ratio,\n            num_comments: post.num_comments,\n            permalink_full: \"https://www.facebook.com\" + post.permalink,\n            url: post.url,\n            content: post.selftext \n        }\n    };\n} else {\n    // Return the error nested inside the \"reddit\" key as well\n    return {\n        facebook: {\n            analytics:\"null\"\n        }\n    };\n}"
+      },
+      "id": "b08b2dfe-be94-40ea-8540-8396d99c033f",
+      "name": "Normalize Facebook Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1904,
+        2784
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    facebook: null\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1776,
+        2832
+      ],
+      "id": "ce99564b-da4b-40e3-8d7e-8386401777a4",
+      "name": "Facebook Default Node"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1712,
+        2352
+      ],
+      "id": "64bc3dc1-4a36-4bb7-9fa1-4e8d70c3475d",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "operation": "aggregate",
+        "collection": "users",
+        "query": "=[\n  {\n    \"$match\": {\n      \"_id\": \"{{ $node['Extract_latest_updated_data_from_db'].json.user_id }}\"\n    }\n  }\n]"
+      },
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.2,
+      "position": [
+        1632,
+        2208
+      ],
+      "id": "683b35ec-a30c-4590-b19f-d573e1bbdd98",
+      "name": "Find User",
+      "credentials": {
+        "mongoDb": {
+          "id": "PZYfSrv8pvK6tdWn",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "collection": "posts",
+        "options": {},
+        "query": "={\n  \"tracking.enabled\": true,\n  \"status\": \"active\"\n}"
+      },
+      "id": "aa4e23fb-4ce3-4a4d-a701-93d070710000",
+      "name": "Find Active Posts",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.2,
+      "position": [
+        768,
+        3104
+      ],
+      "credentials": {
+        "mongoDb": {
+          "id": "PZYfSrv8pvK6tdWn",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "# Schedule Trigger",
+        "height": 224,
+        "width": 512
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        544,
+        3040
+      ],
+      "typeVersion": 1,
+      "id": "9a1aa001-97dc-427a-a221-8e423239c235",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "# Account Find ",
+        "height": 240,
+        "width": 656,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1328,
+        3024
+      ],
+      "typeVersion": 1,
+      "id": "e283d5ab-4015-4d4e-9b2b-968c5db48310",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "# Instagram Analytics",
+        "height": 240,
+        "width": 640,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        768,
+        2736
+      ],
+      "typeVersion": 1,
+      "id": "036cd709-bcb2-40ea-befa-1850d9ebc93f",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "# Facebook Analytics",
+        "height": 240,
+        "width": 624,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1424,
+        2736
+      ],
+      "typeVersion": 1,
+      "id": "b257bec9-82b2-4a67-96fd-23c8f970bfe5",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "# LinkedIn Analytics",
+        "height": 256,
+        "width": 704,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        560,
+        2464
+      ],
+      "typeVersion": 1,
+      "id": "0718abd6-1202-4a6a-b3c6-d0c8e55a7201",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "# Data Refining",
+        "height": 272,
+        "width": 640
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        560,
+        2176
+      ],
+      "typeVersion": 1,
+      "id": "fac721cf-2ee1-4c0f-9040-318fc15b25a1",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "content": "# Mail To Users",
+        "height": 352,
+        "width": 752,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1264,
+        2176
+      ],
+      "typeVersion": 1,
+      "id": "364258cd-a459-4b10-9f44-d3209a59874a",
+      "name": "Sticky Note6"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Process Posts Sequentially": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Map Post Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Analytics Snapshot": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hourly Analytics Check": {
+      "main": [
+        [
+          {
+            "node": "Find Active Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Platform Posts": {
+      "main": [
+        [
+          {
+            "node": "Process Posts Sequentially",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Map Post Fields": {
+      "main": [
+        [
+          {
+            "node": "Fetch Social Accounts",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge-overall-per-post",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Check LinkedIn ID": {
+      "main": [
+        [
+          {
+            "node": "Scrap LinkedIn Post",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "LinkedIn Default Node",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Instagram ID": {
+      "main": [
+        [
+          {
+            "node": "Fetch Instagram Analytics",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Instagram Default Node",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Instagram Analytics": {
+      "main": [
+        [
+          {
+            "node": "Normalize Instagram Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize LinkedIn Data": {
+      "main": [
+        [
+          {
+            "node": "Merge Platform Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Instagram Data": {
+      "main": [
+        [
+          {
+            "node": "Merge Platform Data",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "LinkedIn Default Node": {
+      "main": [
+        [
+          {
+            "node": "Merge Platform Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Instagram Default Node": {
+      "main": [
+        [
+          {
+            "node": "Merge Platform Data",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Fetch Social Accounts": {
+      "main": [
+        [
+          {
+            "node": "Tranform Accounts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tranform Accounts": {
+      "main": [
+        [
+          {
+            "node": "Merge-overall-per-post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Platform Data": {
+      "main": [
+        [
+          {
+            "node": "Create Analytics Snapshot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrap LinkedIn Post": {
+      "main": [
+        [
+          {
+            "node": "Normalize LinkedIn Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Everything_what_to_proceed": {
+      "main": [
+        [
+          {
+            "node": "Check LinkedIn ID",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Check Instagram ID",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Check Facebook ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge-overall-per-post": {
+      "main": [
+        [
+          {
+            "node": "Everything_what_to_proceed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find and update documents": {
+      "main": [
+        [
+          {
+            "node": "Extract_latest_updated_data_from_db",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Find and update documents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Find User",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Extract_latest_updated_data_from_db": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Structured Output Parser",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message": {
+      "main": [
+        [
+          {
+            "node": "edit_ai_reponse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "edit_ai_reponse": {
+      "main": [
+        [
+          {
+            "node": "Find and update documents1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find and update documents1": {
+      "main": [
+        [
+          {
+            "node": "Process Posts Sequentially",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Facebook ID": {
+      "main": [
+        [
+          {
+            "node": "Fetch Fcebook Analytics",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Facebook Default Node",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Fcebook Analytics": {
+      "main": [
+        [
+          {
+            "node": "Normalize Facebook Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Facebook Data": {
+      "main": [
+        [
+          {
+            "node": "Merge Platform Data",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Facebook Default Node": {
+      "main": [
+        [
+          {
+            "node": "Merge Platform Data",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find User": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Active Posts": {
+      "main": [
+        [
+          {
+            "node": "Has Platform Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "e1eb367a-b87e-4498-a9eb-afe8f2610c91",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "18f1c33671181474aeabe1c3028d92e4ae1f82d05bd9579f1a56e4a3608c6386"
+  },
+  "id": "y34ylsA0Cu37hSlR",
+  "tags": []
+}

@@ -1,0 +1,1123 @@
+{
+  "name": "W1.5: AI Social Media Post Refiner (Vision, Brand, Agents, Mail)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "social-media-refine",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "acff7cea-8ce5-4370-8c7b-8d35f8cfb3ca",
+      "name": "Webhook Input",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        1904,
+        752
+      ],
+      "webhookId": "3890f7f9-e8de-43a2-be8d-ced0ed9e975f"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json.body || $input.first().json;\n\nconst state = {\n  userId: input.userId || input.user_id || \"\",\n  userEmail: input.userEmail || input.user_email || \"\",\n  brand_name: input.brand_name || \"\",\n  \n  content: input.content || {},\n  title: input.title || {},\n  tags: input.tags || [],\n  image_url: input.image_url || \"\",\n  platforms: input.platforms || [],\n  \n  platforms_to_edit: Array.isArray(input.platforms_to_edit) ? input.platforms_to_edit : [],\n  human_preference: input.human_preference || \"\",\n  image_preference: input.image_preference || \"no_change\",\n  previous_image_prompt: input.image_prompt_current || {},\n  image_prompt_current: input.image_prompt_current || {},\n  vision_analysis: \"\",\n  \n  text_retries_left: 3,\n  text_approved: false,\n  text_critique: \"\",\n  \n  image_retries_left: 3,\n  image_approved: false,\n  image_critique: \"\"\n};\n\nreturn [{ json: state }];"
+      },
+      "id": "7a3da999-22ed-43e6-859e-ccbaf31901d1",
+      "name": "Initialize State",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2064,
+        704
+      ]
+    },
+    {
+      "parameters": {
+        "collection": "brands",
+        "options": {},
+        "query": "={\n  \"userId\": \"{{$json.userId}}\",\n  \"brand_name\": \"{{$json.brand_name}}\"\n}"
+      },
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.2,
+      "position": [
+        2176,
+        752
+      ],
+      "id": "bbf71757-45b5-4df0-9cb3-722ab016c386",
+      "name": "Get Brand Context",
+      "credentials": {
+        "mongoDb": {
+          "id": "PZYfSrv8pvK6tdWn",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = $('Initialize State').first().json;\nconst brandData = $input.first().json;\n\nconst defaultBrand = { brand_name: \"\", brand_colors: [], brand_style: \"\", brand_text: \"\", logo_url: \"\", logo_position: \"top-right\" };\n\nstate.brand = brandData && Object.keys(brandData).length > 0\n  ? {\n      brand_name: brandData.brand_name || \"\",\n      brand_colors: Array.isArray(brandData.brand_colors) ? brandData.brand_colors : [],\n      brand_style: brandData.brand_style || \"\",\n      brand_text: brandData.brand_text || \"\",\n      logo_url: brandData.logo_url || \"\",\n      logo_position: brandData.logo_position || \"top-right\"\n    }\n  : defaultBrand;\n\nreturn [{ json: state }];"
+      },
+      "id": "0b88d028-5519-4091-ba64-50d2f842377a",
+      "name": "Set Brand Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2304,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "check-edit",
+              "leftValue": "={{ $json.platforms_to_edit.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "50296214-107c-466b-9f1e-b3049ac97918",
+      "name": "Needs Text Edit?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2416,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{`PLATFORMS TO EDIT:\n${JSON.stringify($json.platforms_to_edit)}\n\nHUMAN FEEDBACK:\n${$json.human_preference}\n\nORIGINAL POSTS:\n${JSON.stringify($json.content)}\n\nBRAND STYLE:\n${$json.brand?.brand_style || 'None'}\n\nCRITIQUE (if retrying):\n${$json.text_critique || 'None'}\n\nReturn the updated JSON object now.`}}",
+        "options": {
+          "systemMessage": "You are an elite social media content editor.\n1. ONLY modify platforms listed in 'Platforms to Edit'.\n2. For platforms NOT in the edit list, return their exact original text.\n3. Apply the 'Human Feedback' surgically.\n4. Adopt the Brand Style provided.\n\nReturn ONLY valid JSON:\n{\n  \"linkedin\": \"\",\n  \"facebook\": \"\",\n  \"twitter\": \"\",\n  \"instagram\": \"\",\n  \"reddit\": \"\"\n}"
+        }
+      },
+      "id": "794ea1ee-6f5b-44c8-a136-8292376321f9",
+      "name": "Generate Refined Text",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.6,
+      "position": [
+        1920,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "model": "llama-3.3-70b-versatile",
+        "options": {
+          "temperature": 0.4
+        }
+      },
+      "id": "6f1541c8-01c6-429d-b12f-e557725cc576",
+      "name": "Groq Model 1",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        1920,
+        544
+      ],
+      "credentials": {
+        "groqApi": {
+          "id": "302tUf9gELo6ZuBm",
+          "name": "Groq Vinay"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "let state;\nif ($runIndex === 0) {\n  state = { ...$('Needs Text Edit?').first().json };\n} else {\n  const prev = $('Check Text Retry').all();\n  state = { ...prev[prev.length - 1].json };\n}\n\nconst response = $input.first().json;\nlet parsed = {};\ntry {\n  let content = response.output || '{}';\n  content = content.replace(/```json|```/g, '').trim();\n  parsed = JSON.parse(content);\n} catch (e) { parsed = {}; }\n\nfor (const platform of state.platforms_to_edit) {\n  if (parsed[platform]) state.content[platform] = parsed[platform];\n}\n\nreturn [{ json: state }];"
+      },
+      "id": "0957ce10-1863-4d8d-b99a-48c837dbf1cc",
+      "name": "Merge Text Updates",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2144,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{`HUMAN FEEDBACK:\n${$json.human_preference}\n\nUPDATED POSTS:\n${JSON.stringify($json.content)}\n\nEvaluate the posts now.`}}",
+        "options": {
+          "systemMessage": "You are a STRICT social media content critic. Evaluate if the updated posts successfully applied the Human Feedback.\nReturn ONLY JSON:\n{\n  \"approved\": true/false,\n  \"critique\": \"Short feedback if rejected, or 'All good'\"\n}"
+        }
+      },
+      "id": "4c15a5d6-db5c-439a-a357-695451cc6da0",
+      "name": "Text Critic",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.6,
+      "position": [
+        2240,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = { ...$('Merge Text Updates').last().json };\nconst response = $input.first().json;\n\nlet parsed = {};\ntry {\n  let content = response.output || '{}';\n  content = content.replace(/```json|```/g, '').trim();\n  parsed = JSON.parse(content);\n} catch (e) { parsed = { approved: false, critique: \"Failed to parse\" }; }\n\nstate.text_approved = parsed.approved ?? false;\nstate.text_critique = parsed.critique ?? \"\";\n\nif (!state.text_approved) {\n  state.text_retries_left = Math.max((state.text_retries_left || 0) - 1, 0);\n}\n\nreturn [{ json: state }];"
+      },
+      "id": "77bec7e6-c22e-4f9a-9d47-49893571f3c4",
+      "name": "Update Text State",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2464,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "retry-cond-1",
+              "leftValue": "={{ $json.text_approved }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "false"
+              }
+            },
+            {
+              "id": "retry-cond-2",
+              "leftValue": "={{ $json.text_retries_left }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "50feabca-de0e-4ca6-bfa4-d8a47c2195be",
+      "name": "Check Text Retry",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2528,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "image-cond",
+              "leftValue": "={{ $json.image_preference }}",
+              "rightValue": "generate_new",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "992799cb-5d39-4df2-abf4-c2320486c88d",
+      "name": "Needs New Image?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2592,
+        752
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "has-prev-img",
+              "leftValue": "={{ $json.image_url }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "f7147092-0ae0-4ff5-ba8a-4ac2f4340ab7",
+      "name": "Has Previous Image URL?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1920,
+        32
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  \"model\": \"llama-3.2-90b-vision-preview\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": [\n        { \"type\": \"text\", \"text\": `Analyze this original image. The human requested this change: \"${$json.human_preference}\". Describe exactly what the new image prompt should include to satisfy this feedback, keeping the good parts of the original.` },\n        { \"type\": \"image_url\", \"image_url\": { \"url\": $json.image_url } }\n      ]\n    }\n  ],\n  \"temperature\": 0.2\n}) }}",
+        "options": {}
+      },
+      "id": "96047f98-da4c-4560-9c1a-17151845e163",
+      "name": "Analyze Previous Image (Vision)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2096,
+        16
+      ],
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "XNt3267XjKHTIv7V",
+          "name": "Groq Vinay"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = { ...$('Has Previous Image URL?').first().json };\nlet analysis = \"\";\ntry {\n  const response = $input.first().json;\n  analysis = response.choices?.[0]?.message?.content || \"\";\n} catch (e) {}\nstate.vision_analysis = analysis;\nreturn [{ json: state }];"
+      },
+      "id": "1ddfe3ee-313d-4fb3-8ba1-acd4c38fe7e1",
+      "name": "Merge Vision Analysis",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2272,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{`HUMAN FEEDBACK:\n${$json.human_preference}\n\nVISION ANALYSIS:\n${$json.vision_analysis || 'No previous image analysis available'}\n\nPREVIOUS IMAGE PROMPT:\n${JSON.stringify($json.previous_image_prompt)}\n\nBRAND STYLE:\n${$json.brand?.brand_style || 'None'}\n\nCRITIQUE:\n${$json.image_critique || 'None'}`}}",
+        "options": {
+          "systemMessage": "You are an expert AI image prompt engineer. Update the prompt based on human feedback and the vision analysis of the previous image.\nReturn ONLY JSON:\n{\n  \"image_prompt_current\": {\n    \"subject\": \"\",\n    \"environment\": \"\",\n    \"lighting\": \"\",\n    \"style\": \"\"\n  }\n}"
+        }
+      },
+      "id": "8374b2a2-1b90-45a4-b956-40103b143193",
+      "name": "Generate Image Prompt",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.6,
+      "position": [
+        2416,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "let state;\nif ($runIndex === 0) {\n  try { state = { ...$('Merge Vision Analysis').first().json }; } \n  catch(e) { state = { ...$('Has Previous Image URL?').first().json }; }\n} else {\n  const prev = $('Check Image Retry').all();\n  state = { ...prev[prev.length - 1].json };\n}\n\nconst response = $input.first().json;\nlet parsed = {};\ntry {\n  let content = response.output || '{}';\n  content = content.replace(/```json|```/g, '').trim();\n  parsed = JSON.parse(content);\n} catch (e) { parsed = {}; }\n\nif (parsed.image_prompt_current) {\n  state.image_prompt_current = parsed.image_prompt_current;\n}\n\nreturn [{ json: state }];"
+      },
+      "id": "0f1dc61f-28f1-44eb-956b-4c3f8cfa3d73",
+      "name": "Merge Image Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2640,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{`HUMAN FEEDBACK:\n${$json.human_preference}\n\nIMAGE PROMPT:\n${JSON.stringify($json.image_prompt_current)}`}}",
+        "options": {
+          "systemMessage": "Evaluate the image prompt based on visual clarity and if it applied the human feedback.\nReturn ONLY JSON:\n{\n  \"approved\": true/false,\n  \"critique\": \"feedback\"\n}"
+        }
+      },
+      "id": "75b69db2-2431-4db3-8ddf-4db85052a6b4",
+      "name": "Image Prompt Critic",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.6,
+      "position": [
+        2768,
+        -16
+      ]
+    },
+    {
+      "parameters": {
+        "model": "llama-3.3-70b-versatile",
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "f76086a3-46d2-4dc1-9297-5c8324ef211a",
+      "name": "Groq Model 4",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        2704,
+        160
+      ],
+      "credentials": {
+        "groqApi": {
+          "id": "302tUf9gELo6ZuBm",
+          "name": "Groq Vinay"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = { ...$('Merge Image Prompt').last().json };\nconst response = $input.first().json;\n\nlet parsed = {};\ntry {\n  let content = response.output || '{}';\n  content = content.replace(/```json|```/g, '').trim();\n  parsed = JSON.parse(content);\n} catch (e) { parsed = { approved: false, critique: \"Failed to parse\" }; }\n\nstate.image_approved = parsed.approved ?? false;\nstate.image_critique = parsed.critique ?? \"\";\n\nif (!state.image_approved) {\n  state.image_retries_left = Math.max((state.image_retries_left || 0) - 1, 0);\n}\n\nreturn [{ json: state }];"
+      },
+      "id": "5836ea23-3dfd-423a-bffe-75b39d5836bd",
+      "name": "Update Image State",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3040,
+        32
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "img-retry-cond-1",
+              "leftValue": "={{ $json.image_approved }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "false"
+              }
+            },
+            {
+              "id": "img-retry-cond-2",
+              "leftValue": "={{ $json.image_retries_left }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "8f29a70b-4699-4be8-8206-d2cfbfa42e69",
+      "name": "Check Image Retry",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3168,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Accept",
+              "value": "image/png"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  {\n    \"inputs\": `Subject: ${$json.image_prompt_current?.subject || \"\"}\\nEnvironment: ${$json.image_prompt_current?.environment || \"\"}\\nLighting: ${$json.image_prompt_current?.lighting || \"\"}\\nStyle: ${$json.image_prompt_current?.style || \"\"}\\n\\nBrand Style: ${$json.brand?.brand_style || \"\"}\\nBrand Colors: ${$json.brand?.brand_colors ? $json.brand.brand_colors.join(\", \") : \"\"}`\n  }\n}}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "8d215038-be68-49c9-b730-279023f218de",
+      "name": "Generate Image",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2704,
+        384
+      ],
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "8Jx7ZZaa1VqQuVJM",
+          "name": "HF API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "check-logo",
+              "leftValue": "={{ $json.brand?.logo_url }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2800,
+        528
+      ],
+      "id": "9f7c0ec5-0db7-41f0-9aa6-96ca024c9bc2",
+      "name": "Logo Exists"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.brand.logo_url }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "logo"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2896,
+        384
+      ],
+      "id": "d4197faf-3a83-4eeb-8464-21833eaba058",
+      "name": "Logo Download",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "information"
+      },
+      "type": "n8n-nodes-base.editImage",
+      "typeVersion": 1,
+      "position": [
+        3008,
+        432
+      ],
+      "id": "362ec8d7-a035-4fc1-8ba6-17a183cde801",
+      "name": "Get Information"
+    },
+    {
+      "parameters": {
+        "operation": "composite",
+        "dataPropertyNameComposite": "logo",
+        "positionX": "={{ $node[\"Logo Download\"].json.brand.logo_position.includes('right') ? ($json.size.width - 150) : 20 }}",
+        "positionY": "={{ $node[\"Logo Download\"].json.brand.logo_position.includes('bottom') ? ($json.size.height - 150) : 20 }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.editImage",
+      "typeVersion": 1,
+      "position": [
+        3120,
+        384
+      ],
+      "id": "eb63249a-2954-41e6-89d1-67019aad3bec",
+      "name": "Edit Image"
+    },
+    {
+      "parameters": {
+        "operation": "uploadFile",
+        "additionalFieldsFile": {}
+      },
+      "type": "n8n-nodes-cloudinary.cloudinary",
+      "typeVersion": 1,
+      "position": [
+        3216,
+        528
+      ],
+      "id": "296769ae-74aa-4d9a-be79-9eb4f135489b",
+      "name": "Upload Image",
+      "credentials": {
+        "cloudinaryApi": {
+          "id": "N6aKOTjlbMkYKwqA",
+          "name": "Cloudinary account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "let state;\ntry { state = { ...$('Needs New Image?').first().json }; } \ncatch (e) { state = { ...$('Initialize State').first().json }; }\n\n// Update text from text loop if it ran\ntry {\n  const textUpdates = $('Update Text State').all();\n  if (textUpdates.length > 0) {\n    const latestTextState = textUpdates[textUpdates.length - 1].json;\n    state.content = latestTextState.content;\n  }\n} catch (e) {}\n\n// Update image from Cloudinary if it ran\ntry {\n  const upload = $('Upload Image').first().json || {};\n  if (upload.secure_url || upload.url) {\n    state.image_url = upload.secure_url || upload.url;\n  }\n} catch (e) {}\n\nconst platforms = state.platforms || [];\nconst finalContent = {};\n\nif (platforms.includes('linkedin')) finalContent.linkedin = state.content.linkedin || \"\";\nif (platforms.includes('facebook')) finalContent.facebook = state.content.facebook || \"\";\nif (platforms.includes('instagram')) finalContent.instagram = state.content.instagram || \"\";\nif (platforms.includes('reddit')) finalContent.reddit = state.content.reddit || \"\";\nif (platforms.includes('twitter')) finalContent.twitter = state.content.twitter || \"\";\n\nconst finalOutput = {\n  user_id: state.userId,\n  image_url: state.image_url,\n  content: finalContent,\n  title: state.title,\n  tags: state.tags,\n  platforms: state.platforms\n};\n\nreturn [{ json: finalOutput }];"
+      },
+      "id": "ddf8327f-b9bd-4d0a-88bd-c11676f79254",
+      "name": "Format Final Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2864,
+        752
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Initialize State').item.json.userEmail }}",
+        "subject": "🚀 Your Updated Content is Ready!",
+        "message": "=<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n<style>\n  body { \n    background: #f4f7fb; \n    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; \n    margin: 0; \n    padding: 20px; \n    color: #333;\n  }\n  .container { \n    max-width: 640px; \n    margin: auto; \n    background: #ffffff; \n    border-radius: 12px; \n    overflow: hidden;\n    box-shadow: 0 4px 15px rgba(0,0,0,0.05);\n  }\n  .header {\n    background: linear-gradient(135deg, #2563EB, #4F46E5);\n    color: #ffffff;\n    padding: 24px;\n    text-align: center;\n  }\n  .header h2 {\n    margin: 0;\n    font-size: 24px;\n    font-weight: 600;\n    letter-spacing: -0.5px;\n  }\n  .content-body {\n    padding: 24px;\n  }\n  .image-container {\n    margin-bottom: 24px;\n    text-align: center;\n  }\n  .image-container img {\n    max-width: 100%;\n    height: auto;\n    border-radius: 8px;\n    box-shadow: 0 2px 8px rgba(0,0,0,0.1);\n  }\n  .section { \n    margin-bottom: 20px; \n    padding: 16px; \n    background: #f8fafc; \n    border: 1px solid #e2e8f0;\n    border-radius: 8px; \n    line-height: 1.6;\n  }\n  .section.highlight {\n    background: #eff6ff;\n    border-color: #bfdbfe;\n  }\n  .title { \n    font-weight: 600; \n    font-size: 15px;\n    margin-bottom: 8px; \n    color: #1e293b;\n    display: flex;\n    align-items: center;\n    gap: 6px;\n  }\n  .content-text {\n    font-size: 14px;\n    color: #475569;\n    white-space: pre-wrap; /* Preserves line breaks in social posts */\n  }\n  .tags-container {\n    margin-top: 12px;\n  }\n  .tag {\n    display: inline-block;\n    background: #e2e8f0;\n    color: #475569;\n    padding: 4px 10px;\n    border-radius: 16px;\n    font-size: 12px;\n    font-weight: 500;\n    margin: 0 4px 4px 0;\n  }\n  \n  .cta-container {\n    text-align: center;\n    margin-top: 32px;\n    margin-bottom: 12px;\n  }\n  .cta-button {\n    display: inline-block;\n    background: linear-gradient(135deg, #2563EB, #4F46E5);\n    color: #ffffff;\n    text-decoration: none;\n    padding: 14px 28px;\n    border-radius: 8px;\n    font-weight: 600;\n    font-size: 15px;\n    box-shadow: 0 4px 10px rgba(37, 99, 235, 0.2);\n  }\n</style>\n</head>\n<body>\n<div class=\"container\">\n  <div class=\"header\">\n    <h2>🚀 Your Updated AI Content is Ready!</h2>\n  </div>\n  \n  <div class=\"content-body\">\n    \n    {{\n      $json.image_url && $json.image_url.trim() !== \"\" ? `\n      <div class=\"image-container\">\n        <img src=\"${$json.image_url}\" alt=\"Generated Social Media Visual\" />\n      </div>\n      ` : ''\n    }}\n\n    {{\n      $json.title && $json.title.default ? `\n      <div class=\"section highlight\">\n        <div class=\"title\">📌 Suggested Title</div>\n        <div class=\"content-text\">${$json.title.default}</div>\n      </div>\n      ` : ''\n    }}\n\n    {{\n      $json.content.facebook ? `\n      <div class=\"section\">\n        <div class=\"title\">📘 Facebook</div>\n        <div class=\"content-text\">${$json.content.facebook}</div>\n      </div>\n      ` : ''\n    }}\n\n    {{\n      $json.content.linkedin ? `\n      <div class=\"section\">\n        <div class=\"title\">💼 LinkedIn</div>\n        <div class=\"content-text\">${$json.content.linkedin}</div>\n      </div>\n      ` : ''\n    }}\n\n    {{\n      $json.content.twitter ? `\n      <div class=\"section\">\n        <div class=\"title\">🐦 Twitter</div>\n        <div class=\"content-text\">${$json.content.twitter}</div>\n      </div>\n      ` : ''\n    }}\n\n    {{\n      $json.content.instagram ? `\n      <div class=\"section\">\n        <div class=\"title\">📸 Instagram</div>\n        <div class=\"content-text\">${$json.content.instagram}</div>\n      </div>\n      ` : ''\n    }}\n\n    {{\n      $json.content.reddit ? `\n      <div class=\"section\">\n        <div class=\"title\">💬 Reddit</div>\n        <div class=\"content-text\">${$json.content.reddit}</div>\n      </div>\n      ` : ''\n    }}\n\n    {{\n      $json.tags && $json.tags.length > 0 ? `\n      <div class=\"section\">\n        <div class=\"title\">🏷️ Hashtags</div>\n        <div class=\"tags-container\">\n          ${$json.tags.map(tag => `<span class=\"tag\">#${tag}</span>`).join('')}\n        </div>\n      </div>\n      ` : ''\n    }}\n\n    <div class=\"cta-container\">\n      <a href=\"https://your-app-url.com/dashboard\" class=\"cta-button\">View Updates on App</a>\n    </div>\n\n  </div>\n</div>\n</body>\n</html>",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        3024,
+        752
+      ],
+      "id": "850127a3-0372-4341-838b-8b377f16cbaf",
+      "name": "Send Email",
+      "webhookId": "c5191d28-4e4a-4f55-aa47-15d047c661ee",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "JHosNPcXSQgO4qAE",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $('Format Final Output').first().json }}",
+        "options": {}
+      },
+      "id": "f6f6aa23-c8d0-4e45-9b7c-49a23577c463",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        3184,
+        752
+      ]
+    },
+    {
+      "parameters": {
+        "content": "# Image Prompt Improvement",
+        "height": 352,
+        "width": 1472,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1856,
+        -48
+      ],
+      "typeVersion": 1,
+      "id": "d65aacdc-7fd0-4c44-a4b4-0451b05ab3df",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "# Post Text Improvement",
+        "height": 336,
+        "width": 800,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1856,
+        320
+      ],
+      "typeVersion": 1,
+      "id": "0b99304f-6607-4a11-938a-13d40e47b9e6",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "# Image Improvement",
+        "height": 336,
+        "width": 656,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        2672,
+        320
+      ],
+      "typeVersion": 1,
+      "id": "938358bf-d1e7-4a49-9a87-4ffc2be03a6f",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "# Input Data\n",
+        "height": 256,
+        "width": 896
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1856,
+        672
+      ],
+      "typeVersion": 1,
+      "id": "7ed78335-cecb-458a-8088-8332376b18e1",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "# Final Data\n",
+        "height": 256,
+        "width": 512
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        2816,
+        672
+      ],
+      "typeVersion": 1,
+      "id": "15183346-3eda-4ce4-a765-4e19195d1b08",
+      "name": "Sticky Note4"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook Input": {
+      "main": [
+        [
+          {
+            "node": "Initialize State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Initialize State": {
+      "main": [
+        [
+          {
+            "node": "Get Brand Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Brand Context": {
+      "main": [
+        [
+          {
+            "node": "Set Brand Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Brand Context": {
+      "main": [
+        [
+          {
+            "node": "Needs Text Edit?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs Text Edit?": {
+      "main": [
+        [
+          {
+            "node": "Generate Refined Text",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Needs New Image?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Refined Text": {
+      "main": [
+        [
+          {
+            "node": "Merge Text Updates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Text Updates": {
+      "main": [
+        [
+          {
+            "node": "Text Critic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Text Critic": {
+      "main": [
+        [
+          {
+            "node": "Update Text State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Text State": {
+      "main": [
+        [
+          {
+            "node": "Check Text Retry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Text Retry": {
+      "main": [
+        [
+          {
+            "node": "Generate Refined Text",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Needs New Image?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs New Image?": {
+      "main": [
+        [
+          {
+            "node": "Has Previous Image URL?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Final Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Previous Image URL?": {
+      "main": [
+        [
+          {
+            "node": "Analyze Previous Image (Vision)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Generate Image Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Previous Image (Vision)": {
+      "main": [
+        [
+          {
+            "node": "Merge Vision Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Vision Analysis": {
+      "main": [
+        [
+          {
+            "node": "Generate Image Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Image Prompt": {
+      "main": [
+        [
+          {
+            "node": "Merge Image Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Image Prompt": {
+      "main": [
+        [
+          {
+            "node": "Image Prompt Critic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Image Prompt Critic": {
+      "main": [
+        [
+          {
+            "node": "Update Image State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Image State": {
+      "main": [
+        [
+          {
+            "node": "Check Image Retry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Image Retry": {
+      "main": [
+        [
+          {
+            "node": "Generate Image Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Generate Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Image": {
+      "main": [
+        [
+          {
+            "node": "Logo Exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Logo Exists": {
+      "main": [
+        [
+          {
+            "node": "Logo Download",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Upload Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Logo Download": {
+      "main": [
+        [
+          {
+            "node": "Get Information",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Information": {
+      "main": [
+        [
+          {
+            "node": "Edit Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Image": {
+      "main": [
+        [
+          {
+            "node": "Upload Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload Image": {
+      "main": [
+        [
+          {
+            "node": "Format Final Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Final Output": {
+      "main": [
+        [
+          {
+            "node": "Send Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Model 1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Generate Refined Text",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Text Critic",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Model 4": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Image Prompt Critic",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Generate Image Prompt",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "63b431ee-2405-432d-8223-b8a90c78d539",
+  "meta": {
+    "instanceId": "18f1c33671181474aeabe1c3028d92e4ae1f82d05bd9579f1a56e4a3608c6386"
+  },
+  "id": "0PXep11gBnFPea9k",
+  "tags": []
+}
